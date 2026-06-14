@@ -116,8 +116,15 @@
   <span class="badge" id="badge">Inactivo</span>
 </div>
 
+<!-- Configuración del Worker -->
+<div class="warn" style="margin-top:14px;">
+  <strong>⚙️ Configuración requerida:</strong> Antes de iniciar, asegurate de haber desplegado el
+  <code>worker.js</code> en Cloudflare y de haber reemplazado la URL del Worker en el código
+  (<code>MIX_TOKEN_URL</code>). Las credenciales van solo en el Worker, no en este archivo.
+</div>
+
 <!-- Estado de la autenticación -->
-<div class="box" style="margin-top:14px;">
+<div class="box">
   <h3>🔑 Autenticación OAuth2</h3>
   <div class="info-row"><span>Servidor</span><strong>identity.us.mixtelematics.com</strong></div>
   <div class="info-row"><span>Estado token</span><strong id="token-status">Sin token</strong></div>
@@ -196,15 +203,10 @@ const app = initializeApp({
 const db = getFirestore(app);
 
 // ─── MIX TELEMATICS CONFIG ───────────────────────────────────────────────────
-// Credenciales OAuth2 — el cliente debe proporcionar su client_id y client_secret
-// El endpoint de token usa Basic Auth con base64(client_id:client_secret)
-const MIX_TOKEN_URL   = 'https://identity.us.mixtelematics.com/core/connect/token';
-const MIX_API_BASE    = 'https://integrate.us.mixtelematics.com/api';
-
-// ⚠️  CONFIGURAR: reemplazar con las credenciales reales del cliente
-// El valor de Authorization es base64("client_id:client_secret")
-// Del reporte: Basic bWl4bXhzdXBwb3J0Okk4Wm00Y1FJbVR2Rm5LTFE=
-const MIX_BASIC_AUTH  = 'Basic bWl4bXhzdXBwb3J0Okk4Wm00Y1FJbVR2Rm5LTFE=';
+// El token se obtiene a través del Cloudflare Worker (evita CORS).
+// ⚠️  CONFIGURAR: reemplazar con la URL de tu Worker después de desplegarlo.
+const MIX_TOKEN_URL = 'https://mitransporte.hermanhidalgoa.workers.dev';
+const MIX_API_BASE  = 'https://integrate.us.mixtelematics.com/api';
 
 // AssetIds del cliente (Costa Rica) → mapeados a unitId interno
 // Del reporte Newman: los AssetIds detectados para CR son los siguientes.
@@ -267,16 +269,12 @@ async function obtenerToken() {
   if (_accessToken && Date.now() < _tokenExpiresAt - 60000) return _accessToken;
   if (_tokenRenovando) return _accessToken;
   _tokenRenovando = true;
-  log('🔄 Obteniendo token OAuth2…', 'info');
+  log('🔄 Obteniendo token OAuth2 vía Worker…', 'info');
   try {
+    // El Worker maneja las credenciales y el CORS — solo hacemos POST sin body
     const r = await fetch(MIX_TOKEN_URL, {
       method: 'POST',
-      headers: {
-        'Authorization': MIX_BASIC_AUTH,
-        'Content-Type':  'application/x-www-form-urlencoded',
-      },
-      body: 'grant_type=password&scope=MiX.Integrate+offline_access&username=TU_USUARIO&password=TU_PASSWORD'
-      // ⚠️  CONFIGURAR: reemplazar TU_USUARIO y TU_PASSWORD con las credenciales del cliente
+      headers: { 'Content-Type': 'application/json' },
     });
 
     if (!r.ok) {
