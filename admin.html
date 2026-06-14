@@ -1,0 +1,1095 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>BusetaTrack — Admin</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+  body { max-width:800px; margin:0 auto; }
+  /* ── LOGIN ── */
+  #login-screen {
+    display:none; position:fixed; inset:0; z-index:9999;
+    background:radial-gradient(ellipse at 50% 30%, rgba(168,85,247,.12) 0%, transparent 70%), var(--bg);
+    align-items:center; justify-content:center; flex-direction:column; gap:0;
+  }
+  #login-screen.visible { display:flex; }
+  .login-wrap { display:flex; flex-direction:column; align-items:center; width:100%; max-width:340px; padding:32px 24px; }
+  .login-icon { font-size:52px; margin-bottom:16px; }
+  .login-title { font-family:'Syne',sans-serif; font-weight:800; font-size:24px; margin-bottom:4px; }
+  .login-sub   { font-size:13px; color:var(--muted); margin-bottom:32px; }
+  .login-input-wrap { position:relative; width:100%; margin-bottom:12px; }
+  .login-input {
+    width:100%; padding:16px 48px 16px 18px;
+    border-radius:14px; border:1px solid var(--border);
+    background:var(--surface); color:var(--text);
+    font-family:'DM Sans',sans-serif; font-size:20px; letter-spacing:6px;
+    text-align:center; transition:border-color .2s;
+  }
+  .login-input:focus { outline:none; border-color:var(--purple); }
+  .login-input.error { border-color:var(--red); animation:shake .3s ease; }
+  @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-8px)} 75%{transform:translateX(8px)} }
+  .login-btn {
+    width:100%; padding:16px; border-radius:14px; border:none; cursor:pointer;
+    background:var(--purple); color:white;
+    font-family:'Syne',sans-serif; font-size:16px; font-weight:700;
+    transition:all .2s; margin-top:4px;
+  }
+  .login-btn:hover { opacity:.9; transform:translateY(-1px); }
+  .login-error { font-size:13px; color:var(--red); margin-top:10px; min-height:20px; text-align:center; }
+  .login-footer { font-size:11px; color:var(--muted); margin-top:20px; text-align:center; line-height:1.5; }
+
+  .admin-header { background:var(--surface); border-bottom:1px solid var(--border); padding:16px 24px; display:flex; align-items:center; gap:12px; position:sticky; top:0; z-index:50; }
+  .admin-logo  { font-size:24px; }
+  .admin-title { font-family:'Syne',sans-serif; font-weight:800; font-size:18px; }
+  .admin-badge { background:rgba(168,85,247,.15); border:1px solid rgba(168,85,247,.3); color:var(--purple); font-size:11px; font-weight:700; padding:3px 10px; border-radius:20px; text-transform:uppercase; letter-spacing:1px; margin-left:auto; }
+  .tabs { background:var(--surface); border-bottom:1px solid var(--border); display:flex; }
+  .tab  { flex:1; padding:14px 8px; text-align:center; font-size:13px; font-weight:600; color:var(--muted); cursor:pointer; border-bottom:2px solid transparent; transition:all .2s; font-family:'Syne',sans-serif; }
+  .tab.on { color:var(--accent); border-bottom-color:var(--accent); }
+  .tab-content { display:none; padding:20px; }
+  .tab-content.on { display:block; }
+
+  .gps-live-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:20px; }
+  @media(max-width:500px){ .gps-live-grid{ grid-template-columns:1fr; } }
+  .unit-live-card { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:16px; }
+  .unit-live-card.active-gps { border-color:rgba(34,197,94,.4); }
+  .unit-live-card.no-gps { opacity:.7; }
+  .ulc-header { display:flex; align-items:center; gap:8px; margin-bottom:12px; }
+  .ulc-dot { width:10px; height:10px; border-radius:50%; background:var(--muted); flex-shrink:0; }
+  .ulc-dot.on { background:var(--green); box-shadow:0 0 6px rgba(34,197,94,.5); animation:blink 1.4s infinite; }
+  .ulc-name { font-family:'Syne',sans-serif; font-weight:700; font-size:14px; }
+  .ulc-ruta { font-size:11px; color:var(--muted); }
+  .ulc-stop-item { display:flex; align-items:center; gap:8px; padding:4px 0; font-size:12px; border-bottom:1px solid var(--border); }
+  .ulc-stop-item:last-child { border:none; }
+  .ulc-stop-dot { width:8px; height:8px; border-radius:50%; background:var(--border); flex-shrink:0; }
+  .ulc-stop-dot.done { background:var(--green); }
+  .ulc-stop-dot.here { background:var(--accent); }
+  .ulc-coords { font-family:monospace; font-size:11px; color:var(--accent); margin-top:8px; }
+  .ulc-ts { font-size:10px; color:var(--muted); margin-top:4px; }
+
+  .ruta-card { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:18px; margin-bottom:14px; }
+  .ruta-header { display:flex; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap; }
+  .ruta-color { width:14px; height:14px; border-radius:50%; flex-shrink:0; }
+  .ruta-title { font-family:'Syne',sans-serif; font-weight:700; font-size:16px; flex:1; }
+  .parada-admin-item { display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--border); font-size:13px; }
+  .parada-admin-item:last-child { border:none; }
+  .pa-num { width:22px; height:22px; border-radius:50%; background:var(--surface2); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; color:var(--muted); flex-shrink:0; }
+  .pa-info { flex:1; }
+  .pa-name   { font-weight:500; }
+  .pa-detail { font-size:11px; color:var(--muted); margin-top:2px; }
+  .pa-actions { display:flex; gap:4px; flex-shrink:0; }
+  .pa-btn { background:none; border:1px solid var(--border); color:var(--muted); padding:4px 8px; border-radius:6px; font-size:11px; cursor:pointer; transition:all .15s; }
+  .pa-btn:hover { color:var(--text); border-color:var(--accent); }
+  .pa-btn.del:hover { color:var(--red); border-color:var(--red); }
+
+  .unidad-admin-card { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:16px; margin-bottom:10px; display:flex; align-items:center; gap:12px; }
+  .ua-icon { font-size:24px; width:44px; height:44px; background:var(--surface2); border-radius:10px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .ua-info { flex:1; }
+  .ua-name   { font-family:'Syne',sans-serif; font-weight:700; font-size:14px; }
+  .ua-detail { font-size:12px; color:var(--muted); margin-top:3px; }
+
+  .section-hdr { display:flex; align-items:center; gap:10px; margin-bottom:16px; }
+  .section-hdr h2 { font-family:'Syne',sans-serif; font-weight:700; font-size:16px; }
+  .add-btn { background:rgba(249,115,22,.12); border:1px solid rgba(249,115,22,.3); color:var(--accent); padding:8px 16px; border-radius:10px; cursor:pointer; font-family:'Syne',sans-serif; font-size:13px; font-weight:700; transition:all .15s; }
+  .add-btn:hover { background:rgba(249,115,22,.2); }
+  .icon-btn { background:var(--surface2); border:1px solid var(--border); color:var(--muted); padding:6px 12px; border-radius:8px; font-size:13px; cursor:pointer; transition:all .15s; }
+  .icon-btn:hover { color:var(--text); border-color:var(--accent); }
+  .icon-btn.danger:hover { color:var(--red); border-color:var(--red); }
+
+  .badge { font-size:11px; font-weight:600; padding:3px 10px; border-radius:20px; display:inline-flex; align-items:center; gap:5px; }
+  .badge-active   { background:rgba(34,197,94,.15); color:var(--green); }
+  .badge-inactive { background:rgba(100,116,139,.15); color:var(--muted); }
+
+  .stats-row { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:20px; }
+  .stat-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px; text-align:center; }
+  .stat-val  { font-family:'Syne',sans-serif; font-size:26px; font-weight:800; }
+  .stat-lbl  { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; margin-top:4px; }
+
+  .links-box { background:var(--surface2); border:1px solid var(--border); border-radius:14px; padding:16px; margin-bottom:20px; }
+  .link-row  { display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--border); }
+  .link-row:last-child { border:none; }
+  .link-label { font-size:12px; color:var(--muted); width:110px; flex-shrink:0; }
+  .link-url   { font-family:monospace; font-size:12px; color:var(--text); flex:1; word-break:break-all; }
+  .copy-btn   { background:var(--surface); border:1px solid var(--border); color:var(--muted); padding:5px 10px; border-radius:7px; font-size:11px; cursor:pointer; flex-shrink:0; transition:all .15s; }
+  .copy-btn:hover { color:var(--green); border-color:var(--green); }
+
+  .modal-bg { display:none; position:fixed; inset:0; background:rgba(0,0,0,.75); z-index:200; align-items:flex-end; justify-content:center; }
+  .modal-bg.open { display:flex; }
+  .modal { background:var(--surface); border:1px solid var(--border); border-radius:20px 20px 0 0; padding:24px 20px 32px; width:100%; max-width:480px; max-height:90vh; overflow-y:auto; animation:slideUp .3s ease; }
+  @keyframes slideUp { from{transform:translateY(40px);opacity:0} to{transform:translateY(0);opacity:1} }
+  .modal-title { font-family:'Syne',sans-serif; font-weight:800; font-size:18px; margin-bottom:20px; }
+  .modal-footer { display:flex; gap:10px; margin-top:20px; }
+  .modal-footer button { flex:1; padding:13px; border-radius:10px; border:none; cursor:pointer; font-family:'Syne',sans-serif; font-size:14px; font-weight:700; }
+  .btn-save   { background:var(--accent); color:white; }
+  .btn-cancel { background:var(--surface2); color:var(--muted); }
+  .horarios-grid { display:flex; gap:10px; flex-wrap:wrap; }
+  .hor-check { display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer; }
+  .hor-check input { accent-color:var(--accent); }
+
+  .import-box { background:rgba(249,115,22,.08); border:1px solid rgba(249,115,22,.3); border-radius:14px; padding:16px; margin-bottom:20px; }
+  .import-box h4 { font-family:'Syne',sans-serif; font-weight:700; margin-bottom:6px; font-size:14px; color:var(--accent); }
+  /* ── SEGURIDAD ── */
+  #mapa-exclusion { height:280px !important; width:100% !important; border-radius:12px; overflow:hidden; border:1px solid var(--border); margin-bottom:12px; display:block; }
+  .exclusion-card { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:16px; margin-bottom:14px; }
+  .exclusion-card h3 { font-family:'Syne',sans-serif; font-weight:700; font-size:15px; margin-bottom:6px; }
+  .exclusion-card p  { font-size:12px; color:var(--muted); margin-bottom:12px; line-height:1.5; }
+  .radio-display { font-family:'Syne',sans-serif; font-size:22px; font-weight:700; color:var(--accent); text-align:center; margin:6px 0; }
+  input[type=range] { width:100%; accent-color:var(--accent); }
+
+  /* ── HORARIOS EN RUTAS ── */
+  .horario-turno { display:grid; grid-template-columns:auto 1fr 1fr auto; gap:8px; align-items:center; padding:8px 0; border-bottom:1px solid var(--border); font-size:13px; }
+  .horario-turno:last-child { border:none; }
+  .horario-turno label { display:flex; align-items:center; gap:6px; font-weight:500; white-space:nowrap; }
+  .horario-turno input[type=time] { background:var(--surface2); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:6px 8px; font-size:12px; width:100%; }
+  .horario-turno input[type=time]:focus { outline:none; border-color:var(--accent); }
+  .horario-section { background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:12px; margin-top:10px; }
+  .horario-section-title { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:8px; font-weight:600; }
+
+  .import-box p  { font-size:12px; color:var(--muted); margin-bottom:12px; line-height:1.5; }
+  /* ── MODAL MAPA ── */
+  .modal-mapa-bg { display:none; position:fixed; inset:0; background:rgba(0,0,0,.8); z-index:9998; align-items:center; justify-content:center; padding:16px; }
+  .modal-mapa-bg.open { display:flex; }
+  .modal-mapa { background:var(--surface); border:1px solid var(--border); border-radius:20px; width:100%; max-width:640px; overflow:hidden; animation:slideUp .3s ease; }
+  .modal-mapa-header { display:flex; align-items:center; gap:10px; padding:14px 18px; border-bottom:1px solid var(--border); }
+  .modal-mapa-title  { font-family:'Syne',sans-serif; font-weight:700; font-size:15px; flex:1; }
+  .modal-mapa-close  { background:var(--surface2); border:1px solid var(--border); color:var(--muted); font-size:16px; cursor:pointer; padding:5px 12px; border-radius:8px; }
+  .modal-mapa-close:hover { color:var(--red); border-color:var(--red); }
+  #admin-mapa { height:420px; width:100%; display:block; }
+  .modal-mapa-info { padding:10px 16px; border-top:1px solid var(--border); display:flex; gap:16px; flex-wrap:wrap; }
+  .mmi-item { display:flex; align-items:center; gap:6px; font-size:11px; color:var(--muted); }
+  .mmi-dot  { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+
+</style>
+</head>
+<body>
+
+
+<!-- ══ LOGIN ══ -->
+<div id="login-screen" class="visible">
+  <div class="login-wrap">
+    <div class="login-icon">⚙️</div>
+    <div class="login-title">BusetaTrack</div>
+    <div class="login-sub">Panel de administración</div>
+    <div class="login-input-wrap">
+      <input class="login-input" id="login-pwd" type="password"
+        placeholder="· · · ·" maxlength="20"
+        onkeydown="if(event.key==='Enter')verificarClave()">
+    </div>
+    <button class="login-btn" onclick="verificarClave()">🔐 Ingresar</button>
+    <div class="login-error" id="login-error"></div>
+    <div class="login-footer">Acceso restringido · Solo administradores</div>
+  </div>
+</div>
+
+<div class="admin-header">
+  <span class="admin-logo">⚙️</span>
+  <div><div class="admin-title">BusetaTrack Admin</div><div style="font-size:11px;color:var(--muted);">Panel de administración</div></div>
+  <span class="admin-badge">Admin</span>
+</div>
+
+<div class="tabs">
+  <div class="tab on" onclick="showTab('tab-gps')">🗺️ GPS Vivo</div>
+  <div class="tab"    onclick="showTab('tab-rutas')">🛣️ Rutas</div>
+  <div class="tab"    onclick="showTab('tab-unidades')">🚌 Unidades</div>
+  <div class="tab"    onclick="showTab('tab-seguridad')">🔒 Seguridad</div>
+  <div class="tab"    onclick="showTab('tab-links')">🔗 Links</div>
+</div>
+
+<!-- GPS -->
+<div class="tab-content on" id="tab-gps">
+  <div class="stats-row">
+    <div class="stat-card"><div class="stat-val" id="st-activas">0</div><div class="stat-lbl">En ruta</div></div>
+    <div class="stat-card" style="border-color:rgba(59,130,246,.3);"><div class="stat-val" id="st-consultas" style="color:var(--blue);">0</div><div class="stat-lbl">Consultando</div></div>
+    <div class="stat-card"><div class="stat-val" id="st-rutas">0</div><div class="stat-lbl">Rutas</div></div>
+    <div class="stat-card"><div class="stat-val" id="st-paradas">0</div><div class="stat-lbl">Paradas</div></div>
+  </div>
+  <div class="sec-label">Colaboradores consultando ahora</div>
+  <div id="consultas-panel" style="margin-bottom:16px;background:var(--surface);border:1px solid rgba(59,130,246,.2);border-radius:14px;padding:14px;">
+    <div style="font-size:13px;color:var(--muted);text-align:center;">Esperando conexiones…</div>
+  </div>
+  <div class="sec-label">Unidades en tiempo real</div>
+  <div class="gps-live-grid" id="gps-live-grid">
+    <div class="empty"><div class="empty-icon">📡</div><p>Esperando GPS…</p></div>
+  </div>
+</div>
+
+<!-- RUTAS -->
+<div class="tab-content" id="tab-rutas">
+  <div class="section-hdr">
+    <h2>Rutas configuradas</h2>
+    <button class="add-btn" onclick="abrirModalRuta()">+ Nueva ruta</button>
+  </div>
+  <div id="rutas-admin-list"><div class="empty"><div class="empty-icon">⏳</div><p>Cargando…</p></div></div>
+</div>
+
+<!-- UNIDADES -->
+<div class="tab-content" id="tab-unidades">
+  <div class="section-hdr">
+    <h2>Unidades / Busetas</h2>
+    <button class="add-btn" onclick="abrirModalUnidad()">+ Nueva unidad</button>
+  </div>
+  <div id="unidades-admin-list"><div class="empty"><div class="empty-icon">⏳</div><p>Cargando…</p></div></div>
+</div>
+
+
+<!-- SEGURIDAD -->
+<div class="tab-content" id="tab-seguridad">
+  <div class="exclusion-card">
+    <h3>🚫 Zona de exclusión — Plantel</h3>
+    <p>Haz clic en el mapa para colocar el punto central del plantel. Los colaboradores no verán la unidad cuando esté dentro del radio definido.</p>
+    <div id="mapa-exclusion-wrap">
+      <div id="mapa-exclusion-btn" onclick="initMapaExclusion(true)" style="height:280px;background:var(--surface2);border:1px solid var(--border);border-radius:12px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-direction:column;gap:10px;">
+        <div style="font-size:36px;">🗺️</div>
+        <div style="font-size:14px;color:var(--muted);">Haz clic para cargar el mapa</div>
+      </div>
+      <div id="mapa-exclusion" style="height:280px;width:100%;border-radius:12px;overflow:hidden;border:1px solid var(--border);margin-bottom:0;display:none;"></div>
+    </div>
+    <div class="form-group" style="margin-bottom:8px;">
+      <label class="form-label">Radio de exclusión</label>
+      <div class="radio-display" id="radio-display">150 metros</div>
+      <input type="range" id="radio-slider" min="50" max="1000" step="10" value="150" oninput="window.actualizarRadio(this.value)">
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:4px;"><span>50m</span><span>1000m</span></div>
+    </div>
+    <div id="exclusion-coords" style="font-size:12px;color:var(--muted);margin-bottom:12px;min-height:18px;"></div>
+    <button class="add-btn" style="width:100%;" onclick="guardarExclusion()">💾 Guardar zona de exclusión</button>
+    <div id="exclusion-status" style="font-size:12px;text-align:center;margin-top:8px;min-height:16px;"></div>
+  </div>
+</div>
+
+<!-- LINKS -->
+<div class="tab-content" id="tab-links">
+  <div class="import-box">
+    <h4>⬆️ Importar configuración guardada</h4>
+    <p>Si exportaste tus rutas y paradas anteriormente, impórtalas aquí para subirlas a Firebase y que estén disponibles en todos los dispositivos.</p>
+    <label class="add-btn" style="display:inline-block;cursor:pointer;">
+      Seleccionar archivo JSON
+      <input type="file" accept=".json" style="display:none;" onchange="importarConfig(event)">
+    </label>
+  </div>
+
+  <div class="sec-label">URLs de acceso</div>
+  <div class="links-box">
+    <div class="link-row"><div class="link-label">👤 Colaboradores</div><div class="link-url" id="url-emp">—</div><button class="copy-btn" onclick="copyLink('url-emp')">Copiar</button></div>
+    
+    <div class="link-row"><div class="link-label">⚙️ Admin</div><div class="link-url" id="url-admin">—</div><button class="copy-btn" onclick="copyLink('url-admin')">Copiar</button></div>
+  </div>
+  <div class="bottom-note">Comparte <strong>Colaboradores</strong> con los trabajadores.<br><strong>Conductor</strong> va en el celular de cada buseta.<br>Guarda <strong>Admin</strong> solo para ti.</div>
+  <div style="display:flex;gap:10px;margin-top:16px;margin-bottom:20px;">
+    <button class="add-btn" onclick="exportarConfig()" style="flex:1;">⬇️ Exportar JSON</button>
+  </div>
+</div>
+
+<!-- MODAL RUTA -->
+<div class="modal-bg" id="modal-ruta" onclick="if(event.target===this)cerrarModal('modal-ruta')">
+  <div class="modal">
+    <div class="modal-title" id="mr-title">Nueva Ruta</div>
+    <input type="hidden" id="mr-id">
+    <div class="form-group"><label class="form-label">Nombre</label><input class="form-input" id="mr-nombre" placeholder="Ej: San Rafael"></div>
+    <div class="form-group">
+      <label class="form-label">Color</label>
+      <input type="color" id="mr-color" value="#f97316" style="width:48px;height:40px;border:1px solid var(--border);border-radius:8px;cursor:pointer;background:none;">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Horarios y ventanas de consulta GPS</label>
+      <div class="horario-section">
+        <div class="horario-section-title">Turno · Inicio consulta · Fin consulta · Activo</div>
+        <div class="horario-turno">
+          <label><input type="checkbox" id="hor-6am"  checked style="accent-color:var(--accent);"> 🌅 6:00 AM</label>
+          <input type="time" id="hor-6am-ini"  value="05:20" title="Inicio consulta">
+          <input type="time" id="hor-6am-fin"  value="06:05" title="Fin consulta">
+          <span style="font-size:10px;color:var(--muted);">GPS</span>
+        </div>
+        <div class="horario-turno">
+          <label><input type="checkbox" id="hor-2pm"  checked style="accent-color:var(--accent);"> ☀️ 2:00 PM</label>
+          <input type="time" id="hor-2pm-ini"  value="13:00" title="Inicio consulta">
+          <input type="time" id="hor-2pm-fin"  value="14:05" title="Fin consulta">
+          <span style="font-size:10px;color:var(--muted);">GPS</span>
+        </div>
+        <div class="horario-turno">
+          <label><input type="checkbox" id="hor-6pm"  style="accent-color:var(--accent);"> 🌆 6:00 PM</label>
+          <input type="time" id="hor-6pm-ini"  value="16:40" title="Inicio consulta">
+          <input type="time" id="hor-6pm-fin"  value="18:05" title="Fin consulta">
+          <span style="font-size:10px;color:var(--muted);">GPS</span>
+        </div>
+        <div class="horario-turno">
+          <label><input type="checkbox" id="hor-10pm" checked style="accent-color:var(--accent);"> 🌙 10:00 PM</label>
+          <input type="time" id="hor-10pm-ini" value="21:00" title="Inicio consulta">
+          <input type="time" id="hor-10pm-fin" value="22:05" title="Fin consulta">
+          <span style="font-size:10px;color:var(--muted);">GPS</span>
+        </div>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label" style="display:flex;align-items:center;gap:8px;">Ruta activa <input type="checkbox" id="mr-activa" checked style="accent-color:var(--accent);"></label>
+    </div>
+    <div class="sec-label" style="margin-top:8px;">Paradas</div>
+    <div id="mr-paradas-list" style="margin-bottom:10px;"></div>
+    <button class="add-btn" onclick="agregarParadaTmp()" style="width:100%;margin-bottom:16px;">+ Agregar parada</button>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="cerrarModal('modal-ruta')">Cancelar</button>
+      <button class="btn-save"   onclick="guardarRuta()">Guardar ruta</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL PARADA -->
+<div class="modal-bg" id="modal-parada" onclick="if(event.target===this)cerrarModal('modal-parada')">
+  <div class="modal">
+    <div class="modal-title" id="mp-title">Parada</div>
+    <input type="hidden" id="mp-ruta-id">
+    <input type="hidden" id="mp-idx">
+    <div class="form-group"><label class="form-label">Nombre</label><input class="form-input" id="mp-nombre" placeholder="Ej: Parque Central"></div>
+    <div class="form-group"><label class="form-label">Descripción</label><input class="form-input" id="mp-detalle" placeholder="Ej: Frente a la iglesia"></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Latitud</label><input class="form-input" id="mp-lat" type="number" step="0.0001" placeholder="9.9950"></div>
+      <div class="form-group"><label class="form-label">Longitud</label><input class="form-input" id="mp-lng" type="number" step="0.0001" placeholder="-84.1300"></div>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:12px;">💡 En Google Maps: clic derecho → copiar coordenadas</div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="cerrarModal('modal-parada')">Cancelar</button>
+      <button class="btn-save"   onclick="guardarParada()">Guardar parada</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL UNIDAD -->
+<div class="modal-bg" id="modal-unidad" onclick="if(event.target===this)cerrarModal('modal-unidad')">
+  <div class="modal">
+    <div class="modal-title" id="mu-title">Nueva Unidad</div>
+    <input type="hidden" id="mu-id">
+    <div class="form-group"><label class="form-label">Nombre</label><input class="form-input" id="mu-nombre" placeholder="Ej: Unidad 01"></div>
+    <div class="form-group"><label class="form-label">Placa</label><input class="form-input" id="mu-placa" placeholder="Ej: CRC-001"></div>
+    <div class="form-group"><label class="form-label">Ruta asignada</label><select class="form-select" id="mu-ruta"></select></div>
+    <div class="form-group">
+      <label class="form-label" style="display:flex;align-items:center;gap:8px;">Unidad activa <input type="checkbox" id="mu-activa" checked style="accent-color:var(--accent);"></label>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="cerrarModal('modal-unidad')">Cancelar</button>
+      <button class="btn-save"   onclick="guardarUnidad()">Guardar unidad</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { dbGetRutas, dbGetRuta, dbSaveRuta, dbDeleteRuta,
+         dbGetUnidades, dbSaveUnidad, dbDeleteUnidad,
+         dbOnRutas, dbOnUnidades, dbOnGPS, dbOnConsultas,
+         dbImportarConfig, turnoLabel, uid } from './db.js';
+
+let tmpParadas = [];
+let _gps = {};
+
+// ─── TABS ────────────────────────────────────────────────────────────────────
+window.showTab = function(id) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('on'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
+  document.getElementById(id).classList.add('on');
+  ['tab-gps','tab-rutas','tab-unidades','tab-seguridad','tab-links'].forEach((t,i) => {
+    if(t===id) document.querySelectorAll('.tab')[i].classList.add('on');
+  });
+  if (id==='tab-links') renderLinks();
+};
+
+// ─── INIT ────────────────────────────────────────────────────────────────────
+function init() {
+  renderLinks();
+  dbOnRutas(rutas     => { renderRutasAdmin(); updateStats(); });
+  dbOnUnidades(unds   => { renderUnidadesAdmin(); updateStats(); });
+  dbOnGPS(data        => { _gps = data; refreshGPS(); });
+  dbOnConsultas(data  => { renderConsultas(data); });
+}
+
+function updateStats() {
+  const rutas = dbGetRutas();
+  document.getElementById('st-rutas').textContent   = Object.keys(rutas).length;
+  document.getElementById('st-paradas').textContent = Object.values(rutas).reduce((s,r)=>s+r.paradas.length,0);
+}
+
+// ─── GPS VIVO ─────────────────────────────────────────────────────────────────
+function refreshGPS() {
+  const rutas = dbGetRutas(), unidades = dbGetUnidades(), now = Date.now();
+  const activas = Object.values(_gps).filter(g => now - g.ts < 60000).length;
+  document.getElementById('st-activas').textContent = activas;
+
+  const grid = document.getElementById('gps-live-grid');
+  const list  = Object.values(unidades);
+  if (!list.length) { grid.innerHTML='<div class="empty"><div class="empty-icon">🚌</div><p>No hay unidades</p></div>'; return; }
+
+  grid.innerHTML = list.map(u => {
+    const g = _gps[u.id], ruta = rutas[u.ruta];
+    const isOk = g && (now - g.ts < 60000) && g.estado !== 'puntual';
+    if (!isOk) {
+      // Mostrar última posición conocida aunque esté apagada
+      const tieneUltima = g && g.lat && g.lng;
+      const cuandoStr = g ? (() => {
+        const mins = Math.round((now - g.ts) / 60000);
+        const horas = Math.round(mins / 60);
+        const dias  = Math.round(horas / 24);
+        if (mins < 60) return `hace ${mins} min`;
+        if (horas < 24) return `hace ${horas}h`;
+        return `hace ${dias} día${dias>1?'s':''}`;
+      })() : 'nunca';
+      const paradas = ruta?.paradas || [];
+      const stopIdx = g?.stopIdx || 0;
+      const ultimaParada = paradas[stopIdx]?.nombre || '—';
+      return `
+        <div class="unit-live-card no-gps" style="opacity:1;">
+          <div class="ulc-header">
+            <div class="ulc-dot"></div>
+            <div style="flex:1;"><div class="ulc-name">${u.nombre}</div><div class="ulc-ruta">${ruta?.nombre||'—'} · ${u.placa}</div></div>
+            <span class="badge badge-inactive">Sin señal</span>
+          </div>
+          ${tieneUltima ? `
+            <div style="font-size:11px;color:var(--accent);margin:8px 0 4px;font-weight:600;">📍 Última posición conocida · ${cuandoStr}</div>
+            <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px;">📌 ${ultimaParada}</div>
+            <div style="font-family:monospace;font-size:11px;color:var(--muted);">${g.lat.toFixed(4)}° N, ${Math.abs(g.lng).toFixed(4)}° W</div>
+            <div style="display:flex;gap:8px;margin-top:10px;">
+              <button onclick="verMapaUnidad('${u.id}')" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--muted);font-family:'Syne',sans-serif;font-size:12px;font-weight:700;cursor:pointer;">🗺️ Ver última posición</button>
+              <button id="sol-btn-${u.id}" onclick="solicitarUbicacion('${u.id}')" style="flex:1;padding:8px;border-radius:8px;border:1px solid rgba(59,130,246,.3);background:rgba(59,130,246,.08);color:var(--blue);font-family:'Syne',sans-serif;font-size:12px;font-weight:700;cursor:pointer;">📍 Ver ahora</button>
+            </div>
+          ` : `
+            <div style="font-size:12px;color:var(--muted);text-align:center;padding:10px 0;">📡 Sin datos GPS registrados</div>
+            <button id="sol-btn-${u.id}" onclick="solicitarUbicacion('${u.id}')" style="width:100%;margin-top:6px;padding:8px;border-radius:8px;border:1px solid rgba(59,130,246,.3);background:rgba(59,130,246,.08);color:var(--blue);font-family:'Syne',sans-serif;font-size:12px;font-weight:700;cursor:pointer;">📍 Ver ubicación ahora</button>
+          `}
+        </div>`;
+    }
+    const paradas=ruta?.paradas||[], stopIdx=g.stopIdx;
+    const pct = paradas.length>1 ? Math.round((stopIdx/(paradas.length-1))*100) : 0;
+    const sinceStr = Math.round((now-g.ts)/60000)<1 ? 'ahora mismo' : `hace ${Math.round((now-g.ts)/60000)} min`;
+    const stopsHtml = paradas.slice(0,6).map((p,i)=>`
+      <div class="ulc-stop-item">
+        <div class="ulc-stop-dot ${i<stopIdx?'done':i===stopIdx?'here':''}"></div>
+        <span style="${i===stopIdx?'color:var(--accent);font-weight:600;':i<stopIdx?'color:var(--muted);text-decoration:line-through;':''}">${p.nombre}</span>
+        ${i===stopIdx?'<span style="font-size:10px;color:var(--accent);margin-left:auto;">← aquí</span>':''}
+      </div>`).join('');
+    return `
+      <div class="unit-live-card active-gps">
+        <div class="ulc-header">
+          <div class="ulc-dot on"></div>
+          <div style="flex:1;"><div class="ulc-name">${u.nombre}</div><div class="ulc-ruta">${ruta?.nombre||'—'} · ${turnoLabel(g.turno)}</div></div>
+          <span class="badge badge-active">${pct}%</span>
+        </div>
+        <div class="prog-bg"><div class="prog-fill" style="width:${pct}%;transition:none;"></div></div>
+        <div style="margin-top:10px;">${stopsHtml}</div>
+        <div class="ulc-coords">${g.lat.toFixed(4)}° N, ${Math.abs(g.lng).toFixed(4)}° W</div>
+        <div class="ulc-ts">Actualizado ${sinceStr}</div>
+        <button onclick="verMapaUnidad('${u.id}')" style="margin-top:10px;width:100%;padding:8px;border-radius:8px;border:1px solid rgba(249,115,22,.3);background:rgba(249,115,22,.08);color:var(--accent);font-family:'Syne',sans-serif;font-size:12px;font-weight:700;cursor:pointer;">🗺️ Ver mapa</button>
+      </div>`;
+  }).join('');
+}
+
+// ─── CONSULTAS ────────────────────────────────────────────────────────────────
+function renderConsultas(consultas) {
+  document.getElementById('st-consultas').textContent = consultas.length;
+  const wrap  = document.getElementById('consultas-panel');
+  const rutas = dbGetRutas();
+  if (!consultas.length) { wrap.innerHTML='<div style="font-size:13px;color:var(--muted);text-align:center;padding:4px 0;">Ningún colaborador consultando en este momento</div>'; return; }
+  const byRuta = {};
+  consultas.forEach(c => { if(!byRuta[c.ruta]) byRuta[c.ruta]=[]; byRuta[c.ruta].push(c); });
+  wrap.innerHTML = Object.entries(byRuta).map(([rutaId,items])=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">
+      <span style="font-size:18px;">👥</span>
+      <div style="flex:1;"><div style="font-size:13px;font-weight:600;">${rutas[rutaId]?.nombre||rutaId}</div><div style="font-size:11px;color:var(--muted);">Turno ${turnoLabel(items[0].turno)}</div></div>
+      <div style="background:rgba(59,130,246,.15);color:var(--blue);font-size:13px;font-weight:700;padding:4px 12px;border-radius:20px;">${items.length} persona${items.length>1?'s':''}</div>
+    </div>`).join('');
+}
+
+// ─── RUTAS ────────────────────────────────────────────────────────────────────
+function renderRutasAdmin() {
+  const rutas = dbGetRutas(), wrap = document.getElementById('rutas-admin-list');
+  const list  = Object.values(rutas);
+  if (!list.length) { wrap.innerHTML='<div class="empty"><div class="empty-icon">🛣️</div><p>No hay rutas. Crea la primera.</p></div>'; return; }
+  wrap.innerHTML = list.map(r=>`
+    <div class="ruta-card">
+      <div class="ruta-header">
+        <div class="ruta-color" style="background:${r.color}"></div>
+        <div class="ruta-title">${r.nombre}</div>
+        <span class="badge ${r.activa?'badge-active':'badge-inactive'}">${r.activa?'Activa':'Inactiva'}</span>
+        <div style="display:flex;gap:8px;">
+          <button class="icon-btn" onclick="abrirModalRuta('${r.id}')">✏️ Editar</button>
+          <button class="icon-btn danger" onclick="eliminarRuta('${r.id}')">🗑</button>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Horarios: ${r.horarios.map(turnoLabel).join(', ')} · ${r.paradas.length} paradas</div>
+      <div>
+        ${r.paradas.map((p,i)=>`
+          <div class="parada-admin-item">
+            <div class="pa-num">${i+1}</div>
+            <div class="pa-info"><div class="pa-name">${p.nombre}</div><div class="pa-detail">${p.detalle} · ${p.lat}, ${p.lng}</div></div>
+            <div class="pa-actions">
+              <button class="pa-btn" onclick="editarParadaDirecta('${r.id}',${i})">✏️</button>
+              ${i>0?`<button class="pa-btn" onclick="moverParada('${r.id}',${i},-1)">↑</button>`:''}
+              ${i<r.paradas.length-1?`<button class="pa-btn" onclick="moverParada('${r.id}',${i},1)">↓</button>`:''}
+              <button class="pa-btn del" onclick="eliminarParada('${r.id}',${i})">✕</button>
+            </div>
+          </div>`).join('')}
+        <button class="pa-btn" style="margin-top:8px;padding:7px 14px;border-radius:8px;" onclick="nuevaParadaDirecta('${r.id}')">+ Agregar parada</button>
+      </div>
+    </div>`).join('');
+}
+
+window.abrirModalRuta = function(id=null) {
+  const ruta = id ? dbGetRuta(id) : null;
+  document.getElementById('mr-title').textContent = id ? 'Editar Ruta' : 'Nueva Ruta';
+  document.getElementById('mr-id').value     = id || '';
+  document.getElementById('mr-nombre').value = ruta?.nombre || '';
+  document.getElementById('mr-color').value  = ruta?.color  || '#f97316';
+  document.getElementById('mr-activa').checked = ruta ? ruta.activa : true;
+  const defaults = { '6am':{ini:'05:20',fin:'06:05',activo:true}, '2pm':{ini:'13:00',fin:'14:05',activo:true}, '6pm':{ini:'16:40',fin:'18:05',activo:false}, '10pm':{ini:'21:00',fin:'22:05',activo:true} };
+  ['6am','2pm','6pm','10pm'].forEach(h => {
+    const v = ruta?.ventanas?.[h] || defaults[h];
+    document.getElementById('hor-'+h).checked = ruta ? ruta.horarios.includes(h) : defaults[h].activo;
+    if(document.getElementById('hor-'+h+'-ini')) document.getElementById('hor-'+h+'-ini').value = v.ini || defaults[h].ini;
+    if(document.getElementById('hor-'+h+'-fin')) document.getElementById('hor-'+h+'-fin').value = v.fin || defaults[h].fin;
+  });
+  tmpParadas = ruta ? JSON.parse(JSON.stringify(ruta.paradas)) : [];
+  renderParadasModal();
+  abrirModal('modal-ruta');
+};
+window.eliminarRuta = async function(id) {
+  if (!confirm('¿Eliminar esta ruta?')) return;
+  await dbDeleteRuta(id);
+};
+
+function renderParadasModal() {
+  const wrap = document.getElementById('mr-paradas-list');
+  if (!tmpParadas.length) { wrap.innerHTML='<div style="text-align:center;padding:16px;font-size:13px;color:var(--muted);">Sin paradas.</div>'; return; }
+  wrap.innerHTML = tmpParadas.map((p,i)=>`
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px;display:flex;align-items:center;gap:10px;">
+      <div style="width:22px;height:22px;border-radius:50%;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--muted);flex-shrink:0;">${i+1}</div>
+      <div style="flex:1;"><div style="font-size:13px;font-weight:500;">${p.nombre}</div><div style="font-size:11px;color:var(--muted);">${p.detalle} · ${p.lat},${p.lng}</div></div>
+      <button class="pa-btn" onclick="editarParadaTmp(${i})">✏️</button>
+      <button class="pa-btn del" onclick="borrarParadaTmp(${i})">✕</button>
+    </div>`).join('');
+}
+window.agregarParadaTmp = function() { tmpParadas.push({id:'p'+uid(),nombre:'Nueva parada',detalle:'Descripción',lat:9.99,lng:-84.13}); editarParadaTmp(tmpParadas.length-1); };
+window.editarParadaTmp  = function(i) {
+  const p=tmpParadas[i];
+  document.getElementById('mp-title').textContent='Editar parada';
+  document.getElementById('mp-ruta-id').value='__tmp__'; document.getElementById('mp-idx').value=i;
+  document.getElementById('mp-nombre').value=p.nombre; document.getElementById('mp-detalle').value=p.detalle;
+  document.getElementById('mp-lat').value=p.lat; document.getElementById('mp-lng').value=p.lng;
+  abrirModal('modal-parada');
+};
+window.borrarParadaTmp = function(i) { if(!confirm('¿Eliminar?'))return; tmpParadas.splice(i,1); renderParadasModal(); };
+
+window.guardarRuta = async function() {
+  const id=document.getElementById('mr-id').value||uid(), nombre=document.getElementById('mr-nombre').value.trim();
+  if(!nombre){alert('El nombre es requerido');return;}
+  const turnosDisp = ['6am','2pm','6pm','10pm'];
+  const horarios = turnosDisp.filter(h=>document.getElementById('hor-'+h).checked);
+  // Ventanas de consulta GPS por turno
+  const ventanas = {};
+  turnosDisp.forEach(h => {
+    const ini = document.getElementById('hor-'+h+'-ini')?.value || '';
+    const fin = document.getElementById('hor-'+h+'-fin')?.value || '';
+    const activo = document.getElementById('hor-'+h)?.checked || false;
+    ventanas[h] = { ini, fin, activo };
+  });
+  await dbSaveRuta({ id, nombre, color:document.getElementById('mr-color').value,
+    horarios:horarios.length?horarios:['6am'], ventanas, paradas:tmpParadas,
+    activa:document.getElementById('mr-activa').checked });
+  cerrarModal('modal-ruta');
+};
+
+window.editarParadaDirecta = function(rutaId,idx) {
+  const p=dbGetRuta(rutaId).paradas[idx];
+  document.getElementById('mp-title').textContent='Editar parada';
+  document.getElementById('mp-ruta-id').value=rutaId; document.getElementById('mp-idx').value=idx;
+  document.getElementById('mp-nombre').value=p.nombre; document.getElementById('mp-detalle').value=p.detalle;
+  document.getElementById('mp-lat').value=p.lat; document.getElementById('mp-lng').value=p.lng;
+  abrirModal('modal-parada');
+};
+window.nuevaParadaDirecta = function(rutaId) {
+  document.getElementById('mp-title').textContent='Nueva parada';
+  document.getElementById('mp-ruta-id').value=rutaId; document.getElementById('mp-idx').value='-1';
+  ['mp-nombre','mp-detalle','mp-lat','mp-lng'].forEach(id=>document.getElementById(id).value='');
+  abrirModal('modal-parada');
+};
+window.guardarParada = async function() {
+  const rutaId=document.getElementById('mp-ruta-id').value, idx=parseInt(document.getElementById('mp-idx').value);
+  const parada={ id:'p'+uid(), nombre:document.getElementById('mp-nombre').value.trim(),
+    detalle:document.getElementById('mp-detalle').value.trim(),
+    lat:parseFloat(document.getElementById('mp-lat').value),
+    lng:parseFloat(document.getElementById('mp-lng').value) };
+  if(!parada.nombre){alert('El nombre es requerido');return;}
+  if(rutaId==='__tmp__') { if(idx>=0)tmpParadas[idx]={...tmpParadas[idx],...parada}; else tmpParadas.push(parada); renderParadasModal(); }
+  else {
+    const ruta=dbGetRuta(rutaId);
+    if(idx>=0)ruta.paradas[idx]={...ruta.paradas[idx],...parada}; else ruta.paradas.push(parada);
+    await dbSaveRuta(ruta);
+  }
+  cerrarModal('modal-parada');
+};
+window.eliminarParada = async function(rutaId,idx) {
+  if(!confirm('¿Eliminar esta parada?'))return;
+  const ruta=dbGetRuta(rutaId); ruta.paradas.splice(idx,1); await dbSaveRuta(ruta);
+};
+window.moverParada = async function(rutaId,idx,dir) {
+  const ruta=dbGetRuta(rutaId); const[p]=ruta.paradas.splice(idx,1); ruta.paradas.splice(idx+dir,0,p); await dbSaveRuta(ruta);
+};
+
+// ─── UNIDADES ────────────────────────────────────────────────────────────────
+function renderUnidadesAdmin() {
+  const unds=dbGetUnidades(), rutas=dbGetRutas(), wrap=document.getElementById('unidades-admin-list');
+  const list=Object.values(unds);
+  if(!list.length){wrap.innerHTML='<div class="empty"><div class="empty-icon">🚌</div><p>No hay unidades.</p></div>';return;}
+  wrap.innerHTML=list.map(u=>`
+    <div class="unidad-admin-card">
+      <div class="ua-icon">🚌</div>
+      <div class="ua-info"><div class="ua-name">${u.nombre}</div><div class="ua-detail">Placa: ${u.placa} · Ruta: ${rutas[u.ruta]?.nombre||'Sin asignar'}</div></div>
+      <span class="badge ${u.activa?'badge-active':'badge-inactive'}">${u.activa?'Activa':'Inactiva'}</span>
+      <div style="display:flex;gap:6px;">
+        <button class="icon-btn" onclick="abrirModalUnidad('${u.id}')">✏️</button>
+        <button class="icon-btn danger" onclick="eliminarUnidad('${u.id}')">🗑</button>
+      </div>
+    </div>`).join('');
+}
+window.abrirModalUnidad = function(id=null) {
+  const u=id?dbGetUnidades()[id]:null, rutas=dbGetRutas();
+  document.getElementById('mu-title').textContent=id?'Editar Unidad':'Nueva Unidad';
+  document.getElementById('mu-id').value=id||''; document.getElementById('mu-nombre').value=u?.nombre||'';
+  document.getElementById('mu-placa').value=u?.placa||''; document.getElementById('mu-activa').checked=u?u.activa:true;
+  document.getElementById('mu-ruta').innerHTML=Object.values(rutas).map(r=>`<option value="${r.id}" ${u?.ruta===r.id?'selected':''}>${r.nombre}</option>`).join('');
+  abrirModal('modal-unidad');
+};
+window.guardarUnidad = async function() {
+  const id=document.getElementById('mu-id').value||'U'+uid();
+  const u={id, nombre:document.getElementById('mu-nombre').value.trim(),
+    placa:document.getElementById('mu-placa').value.trim(),
+    ruta:document.getElementById('mu-ruta').value,
+    activa:document.getElementById('mu-activa').checked};
+  if(!u.nombre){alert('El nombre es requerido');return;}
+  await dbSaveUnidad(u); cerrarModal('modal-unidad');
+};
+window.eliminarUnidad = async function(id) {
+  if(!confirm('¿Eliminar esta unidad?'))return; await dbDeleteUnidad(id);
+};
+
+// ─── LINKS ────────────────────────────────────────────────────────────────────
+function renderLinks() {
+  const base=window.location.href.replace(/[^\/]*$/,'');
+  document.getElementById('url-emp').textContent   = base+'colaboradores.html';
+  
+  document.getElementById('url-admin').textContent = base+'admin.html';
+}
+window.copyLink = function(id) {
+  navigator.clipboard.writeText(document.getElementById(id).textContent).then(()=>{
+    event.target.textContent='✓ Copiado'; setTimeout(()=>event.target.textContent='Copiar',1500);
+  });
+};
+window.exportarConfig = function() {
+  const data={rutas:dbGetRutas(),unidades:dbGetUnidades(),ts:new Date().toISOString()};
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));
+  a.download='busetatrack-config.json'; a.click();
+};
+window.importarConfig = async function(e) {
+  const file=e.target.files[0]; if(!file)return;
+  const reader=new FileReader();
+  reader.onload=async ev=>{
+    try {
+      const data=JSON.parse(ev.target.result);
+      await dbImportarConfig(data);
+      alert('✅ Configuración importada a Firebase. Ya está disponible en todos los dispositivos.');
+    } catch { alert('Error al leer el archivo'); }
+  };
+  reader.readAsText(file);
+};
+
+// ─── MODALES ─────────────────────────────────────────────────────────────────
+window.abrirModal  = id => document.getElementById(id).classList.add('open');
+window.cerrarModal = id => document.getElementById(id).classList.remove('open');
+
+init();
+// Refrescar display de GPS cada 60 segundos para actualizar "hace X min"
+setInterval(() => { if (Object.keys(_gps).length) refreshGPS(); }, 30000);
+
+// ─── CONSULTA MANUAL (una sola petición al API sin importar horario) ──────────
+const TENANT_ID_ADM = '742';
+const APP_ID_ADM    = '10001';
+
+// IDs de Powerfleet por unitId
+const POWERFLEET_IDS = {
+  'U01': '4273350242566909952',
+  'U02': '4273350389036195840',
+};
+const _gpsIndexAdm = {};
+
+window.consultaManual = async function(unitId) {
+  // Leer token de Firebase (sincronizado por la extensión)
+  let token = '';
+  try {
+    const r = await fetch('https://firestore.googleapis.com/v1/projects/busetatrack/databases/(default)/documents/bridge/token?key=AIzaSyCKMIoHaMgeyVhksXFRYS0eONEJgmj0WUM');
+    if (r.ok) {
+      const data = await r.json();
+      token = data?.fields?.token?.stringValue || '';
+    }
+  } catch(e) {}
+
+  if (!token) { alert('No hay token disponible. Asegúrate de que el bridge o la extensión estén activos.'); return; }
+
+  const vid = POWERFLEET_IDS[unitId];
+  if (!vid) { alert('Unidad no reconocida: ' + unitId); return; }
+
+  const unidades = dbGetUnidades();
+  const rutas    = dbGetRutas();
+  const u        = unidades[unitId];
+  const ruta     = u ? rutas[u.ruta] : null;
+
+  // Mostrar estado de carga en el botón
+  const btns = document.querySelectorAll(`[onclick="consultaManual('${unitId}')"]`);
+  btns.forEach(b => { b.textContent = '⏳ Consultando…'; b.disabled = true; });
+
+  try {
+    const reqId = 'bt' + Math.random().toString(36).slice(2,8);
+    const gpsIdx = _gpsIndexAdm[vid] || '0';
+    const url = `https://us.visionai.unityaiot.com/gateway/base-gps-service/api/v1/gps/last/increment?gpsIndex=${gpsIdx}&reqId=${reqId}&vehicleId=${vid}`;
+
+    const r = await fetch(url, {
+      method: 'GET',
+      headers: { '_token': token, '_tenantid': TENANT_ID_ADM, '_appid': APP_ID_ADM, '_langtype': 'es_ES', 'Accept': 'application/json, text/plain, */*' }
+    });
+
+    if (!r.ok) { alert('Error al consultar: HTTP ' + r.status); return; }
+
+    const json = await r.json();
+    if (!json.success || !json.data) { alert('Sin datos del API'); return; }
+    if (json.data.gpsIndex) _gpsIndexAdm[vid] = json.data.gpsIndex;
+
+    const lista = (json.data.gpsList || []).filter(i => String(i.vid) === String(vid));
+    if (!lista.length) { alert('La unidad no reportó ubicación'); return; }
+
+    const item = lista[lista.length - 1];
+    const lat  = item.lat / 1000000;
+    const lng  = item.lng / 1000000;
+
+    if (lat < 8 || lat > 11 || lng < -86 || lng > -82) { alert('Coordenadas fuera de Costa Rica'); return; }
+
+    // Mostrar en el mapa admin
+    const nombre = u?.nombre || unitId;
+    const placa  = u?.placa  || '';
+    document.getElementById('modal-mapa-title').textContent = nombre + ' · ' + (ruta?.nombre || '') + ' · Consulta manual';
+    document.getElementById('modal-mapa-bg').classList.add('open');
+
+    setTimeout(() => {
+      if (!_adminMapa) {
+        _adminMapa = L.map('admin-mapa', { zoomControl:true, attributionControl:true });
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19, attribution:'© OpenStreetMap' }).addTo(_adminMapa);
+      }
+      _adminMarkers.forEach(m => _adminMapa.removeLayer(m));
+      _adminMarkers = [];
+
+      // Marcador de la unidad
+      const mBus = L.marker([lat, lng], {
+        icon: L.divIcon({ html:`<div style="background:#f97316;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,.5);">🚌</div>`, iconSize:[36,36], iconAnchor:[18,18], className:'' }),
+        zIndexOffset:1000
+      }).addTo(_adminMapa).bindPopup(`<b>🚌 ${nombre}</b><br>Placa: ${placa}<br>${lat.toFixed(5)}° N, ${Math.abs(lng).toFixed(5)}° W<br><small>Consulta manual</small>`);
+      mBus.openPopup();
+      _adminMarkers.push(mBus);
+
+      // Paradas de la ruta
+      if (ruta?.paradas?.length) {
+        ruta.paradas.forEach((p, i) => {
+          const m = L.marker([p.lat, p.lng], {
+            icon: L.divIcon({ html:`<div style="background:#22c55e;width:10px;height:10px;border-radius:50%;border:2px solid white;"></div>`, iconSize:[10,10], iconAnchor:[5,5], className:'' })
+          }).addTo(_adminMapa).bindPopup(`<b>${p.nombre}</b><br><small>${p.detalle}</small>`);
+          _adminMarkers.push(m);
+        });
+      }
+
+      const bounds = [[lat, lng]];
+      if (ruta?.paradas?.length) ruta.paradas.forEach(p => bounds.push([p.lat, p.lng]));
+      _adminMapa.fitBounds(L.latLngBounds(bounds), { padding:[30,30], maxZoom:15 });
+      _adminMapa.invalidateSize();
+    }, 150);
+
+  } catch(e) {
+    alert('Error: ' + e.message);
+  } finally {
+    btns.forEach(b => { b.textContent = '📍 Ver ubicación actual'; b.disabled = false; });
+  }
+};
+
+// ─── MAPA ADMIN ──────────────────────────────────────────────────────────────
+let _adminMapa = null;
+let _adminMarkers = [];
+
+function iconBusAdmin() {
+  return L.divIcon({
+    html:`<div style="background:#f97316;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,.5);">🚌</div>`,
+    iconSize:[36,36], iconAnchor:[18,18], className:''
+  });
+}
+
+function iconStopAdmin(pasada) {
+  const color = pasada ? '#374151' : '#22c55e';
+  const size  = pasada ? 8 : 10;
+  return L.divIcon({
+    html:`<div style="background:${color};width:${size}px;height:${size}px;border-radius:50%;border:2px solid white;opacity:${pasada?'.5':'1'};"></div>`,
+    iconSize:[size,size], iconAnchor:[size/2,size/2], className:''
+  });
+}
+
+window.verMapaUnidad = function(unitId) {
+  const u    = dbGetUnidades()[unitId];
+  const g    = _gps[unitId];
+  const ruta = g ? dbGetRutas()[g.ruta] : (u ? dbGetRutas()[u.ruta] : null);
+  if (!ruta && !g) return;
+  const now = Date.now();
+  const isActiva = g && (now - g.ts < 60000);
+  const tienePos = g && g.lat && g.lng;
+
+  const estadoStr = isActiva ? '' : tienePos ? ' · Última posición conocida' : '';
+  document.getElementById('modal-mapa-title').textContent = (u?.nombre || unitId) + ' · ' + (ruta?.nombre || '') + estadoStr;
+  document.getElementById('modal-mapa-bg').classList.add('open');
+
+  setTimeout(() => {
+    // Inicializar mapa si es primera vez
+    if (!_adminMapa) {
+      _adminMapa = L.map('admin-mapa', { zoomControl:true, attributionControl:true });
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom:19, attribution:'© OpenStreetMap'
+      }).addTo(_adminMapa);
+    }
+
+    // Limpiar marcadores anteriores
+    _adminMarkers.forEach(m => _adminMapa.removeLayer(m));
+    _adminMarkers = [];
+
+    const bounds = [];
+    const curStop = g?.stopIdx ?? 0;
+
+    // Paradas
+    if (ruta?.paradas?.length) {
+      ruta.paradas.forEach((p, i) => {
+        const pasada = i < curStop;
+        const actual = i === curStop;
+        const m = L.marker([p.lat, p.lng], { icon: iconStopAdmin(pasada) })
+          .addTo(_adminMapa)
+          .bindPopup(`<b>${actual ? '📍 ' : pasada ? '✓ ' : ''}${p.nombre}</b><br><small>${p.detalle}</small>`);
+        _adminMarkers.push(m);
+        bounds.push([p.lat, p.lng]);
+        if (actual) m.openPopup();
+      });
+    }
+
+    // Marcador de la unidad (activa o última posición conocida)
+    if (tienePos) {
+      const mins = Math.round((now - g.ts) / 60000);
+      const cuandoStr = mins < 1 ? 'ahora mismo' : mins < 60 ? `hace ${mins} min` : `hace ${Math.round(mins/60)}h`;
+      const iconUsar = isActiva ? iconBusAdmin() : L.divIcon({
+        html: `<div style="background:#64748b;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,.5);opacity:.7;">🚌</div>`,
+        iconSize:[36,36], iconAnchor:[18,18], className:''
+      });
+      const mBus = L.marker([g.lat, g.lng], { icon: iconUsar, zIndexOffset:1000 })
+        .addTo(_adminMapa)
+        .bindPopup(`<b>${isActiva ? '🚌' : '⚫'} ${u?.nombre || unitId}</b><br>Placa: ${u?.placa || '—'}<br>Parada: ${ruta?.paradas?.[curStop]?.nombre || curStop}<br><small style="color:#64748b;">${isActiva ? 'En ruta' : 'Apagada · ' + cuandoStr}</small>`);
+      _adminMarkers.push(mBus);
+      bounds.push([g.lat, g.lng]);
+      if (!isActiva) mBus.openPopup();
+    }
+
+    // Zoom
+    if (bounds.length) {
+      _adminMapa.fitBounds(L.latLngBounds(bounds), { padding:[30,30], maxZoom:15 });
+    }
+    _adminMapa.invalidateSize();
+  }, 150);
+};
+
+
+// ─── SOLICITUD DE UBICACIÓN PUNTUAL ──────────────────────────────────────────
+const FIRESTORE_SOL = 'https://firestore.googleapis.com/v1/projects/busetatrack/databases/(default)/documents';
+const FIREBASE_SOL_KEY = 'AIzaSyCKMIoHaMgeyVhksXFRYS0eONEJgmj0WUM';
+
+window.solicitarUbicacion = async function(unitId) {
+  const btn = document.getElementById('sol-btn-' + unitId) || event.target;
+  const textoOriginal = btn.textContent;
+  btn.textContent = '⏳ Solicitando…';
+  btn.disabled = true;
+
+  try {
+    // Escribir solicitud en Firebase
+    const url  = FIRESTORE_SOL + '/solicitudes/' + unitId + '?key=' + FIREBASE_SOL_KEY;
+    const body = { fields: {
+      solicitado: { booleanValue: true },
+      ts:         { integerValue: String(Date.now()) },
+      unitId:     { stringValue: unitId }
+    }};
+    await fetch(url, { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+
+    // Esperar respuesta — el bridge la procesa y borra la solicitud
+    // Monitorear el doc de GPS de esta unidad por cambios
+    let intentos = 0;
+    const tsAntes = Date.now();
+    const esperar = setInterval(async () => {
+      intentos++;
+      try {
+        const r = await fetch(FIRESTORE_SOL + '/gps/' + unitId + '?key=' + FIREBASE_SOL_KEY);
+        if (r.ok) {
+          const data = await r.json();
+          const ts = parseInt(data?.fields?.ts?.integerValue || 0);
+          if (ts > tsAntes) {
+            clearInterval(esperar);
+            btn.textContent = '✅ Actualizado';
+            btn.disabled = false;
+            setTimeout(() => { btn.textContent = textoOriginal; }, 2000);
+            // Refrescar el GPS y abrir el mapa con la nueva posición
+            refreshGPS();
+            setTimeout(() => verMapaUnidad(unitId), 500);
+            return;
+          }
+        }
+      } catch(e) {}
+      if (intentos >= 15) { // timeout 15s
+        clearInterval(esperar);
+        btn.textContent = '❌ Sin respuesta';
+        btn.disabled = false;
+        setTimeout(() => { btn.textContent = textoOriginal; }, 2000);
+      }
+    }, 1000);
+
+  } catch(e) {
+    btn.textContent = '❌ Error';
+    btn.disabled = false;
+    setTimeout(() => { btn.textContent = textoOriginal; }, 2000);
+  }
+};
+
+window.cerrarMapaAdmin = function() {
+  document.getElementById('modal-mapa-bg').classList.remove('open');
+};
+
+// ─── ZONA DE EXCLUSIÓN ────────────────────────────────────────────────────────
+const FIRESTORE_REST_EXCL = 'https://firestore.googleapis.com/v1/projects/busetatrack/databases/(default)/documents';
+const FIREBASE_KEY_EXCL   = 'AIzaSyCKMIoHaMgeyVhksXFRYS0eONEJgmj0WUM';
+
+let _mapaExcl    = null;
+let _markerExcl  = null;
+let _circuloExcl = null;
+let _exclData    = { lat: null, lng: null, radio: 150 };
+
+window.initMapaExclusion = function() {
+  if (_mapaExcl) { setTimeout(() => _mapaExcl.invalidateSize(), 100); return; }
+  const btnEl = document.getElementById('mapa-exclusion-btn');
+  const mapEl = document.getElementById('mapa-exclusion');
+  if (!mapEl) return;
+  if (btnEl) btnEl.style.display = 'none';
+  mapEl.style.cssText = 'display:block!important;height:280px!important;width:100%!important;';
+  _mapaExcl = L.map('mapa-exclusion', { center:[10.0,-84.12], zoom:14 });
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19, attribution:'© OSM' }).addTo(_mapaExcl);
+  setTimeout(() => _mapaExcl.invalidateSize(), 300);
+  fetch(FIRESTORE_REST_EXCL + '/config/exclusion?key=' + FIREBASE_KEY_EXCL)
+    .then(r => r.ok ? r.json() : null).then(data => {
+      if (!data?.fields) return;
+      const lat = data.fields.lat?.doubleValue, lng = data.fields.lng?.doubleValue;
+      const radio = parseInt(data.fields.radio?.integerValue || 150);
+      if (lat && lng) {
+        _exclData = { lat, lng, radio };
+        document.getElementById('radio-slider').value = radio;
+        window.actualizarRadio(radio);
+        _ponerMarcadorExcl(lat, lng);
+        _mapaExcl.setView([lat, lng], 15);
+      }
+    }).catch(()=>{});
+  _mapaExcl.on('click', e => _ponerMarcadorExcl(e.latlng.lat, e.latlng.lng));
+};
+
+function _ponerMarcadorExcl(lat, lng) {
+  _exclData.lat = lat; _exclData.lng = lng;
+  const radio = _exclData.radio || 150;
+  if (_markerExcl)  _mapaExcl.removeLayer(_markerExcl);
+  if (_circuloExcl) _mapaExcl.removeLayer(_circuloExcl);
+  _markerExcl = L.marker([lat,lng],{icon:L.divIcon({html:'<div style="background:#ef4444;width:16px;height:16px;border-radius:50%;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,.4);"></div>',iconSize:[16,16],iconAnchor:[8,8],className:''})}).addTo(_mapaExcl).bindPopup('🏭 Plantel · Radio: '+radio+'m');
+  _circuloExcl = L.circle([lat,lng],{radius:radio,color:'#ef4444',fillColor:'#ef4444',fillOpacity:.15,weight:2}).addTo(_mapaExcl);
+  document.getElementById('exclusion-coords').textContent = lat.toFixed(5)+'° N, '+Math.abs(lng).toFixed(5)+'° W';
+}
+
+window.actualizarRadio = function(val) {
+  const r = parseInt(val);
+  _exclData.radio = r;
+  document.getElementById('radio-display').textContent = r + ' metros';
+  if (_circuloExcl && _exclData.lat) {
+    _mapaExcl.removeLayer(_circuloExcl);
+    _circuloExcl = L.circle([_exclData.lat,_exclData.lng],{radius:r,color:'#ef4444',fillColor:'#ef4444',fillOpacity:.15,weight:2}).addTo(_mapaExcl);
+  }
+};
+
+window.guardarExclusion = async function() {
+  if (!_exclData.lat) { alert('Haz clic en el mapa para colocar el plantel primero'); return; }
+  const st = document.getElementById('exclusion-status');
+  st.textContent='⏳ Guardando…'; st.style.color='var(--muted)';
+  try {
+    const r = await fetch(FIRESTORE_REST_EXCL+'/config/exclusion?key='+FIREBASE_KEY_EXCL,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({fields:{lat:{doubleValue:_exclData.lat},lng:{doubleValue:_exclData.lng},radio:{integerValue:String(_exclData.radio)},activo:{booleanValue:true}}})});
+    st.textContent = r.ok ? '✅ Zona guardada' : '❌ Error al guardar';
+    st.style.color = r.ok ? 'var(--green)' : 'var(--red)';
+  } catch(e) { st.textContent='❌ '+e.message; st.style.color='var(--red)'; }
+};
+
+</script>
+
+<script>
+(function() {
+  const CLAVE    = '1252';
+  const TTL_MS   = 24 * 60 * 60 * 1000; // 24 horas
+
+  function sesionValida() {
+    const ts = localStorage.getItem('bt_admin_ts');
+    return ts && (Date.now() - parseInt(ts)) < TTL_MS;
+  }
+
+  function mostrarAdmin() {
+    document.getElementById('login-screen').classList.remove('visible');
+  }
+
+  function ocultarAdmin() {
+    document.getElementById('login-screen').classList.add('visible');
+    setTimeout(() => document.getElementById('login-pwd')?.focus(), 100);
+  }
+
+  window.verificarClave = function() {
+    const input = document.getElementById('login-pwd');
+    const error = document.getElementById('login-error');
+    if (input.value === CLAVE) {
+      localStorage.setItem('bt_admin_ts', Date.now().toString());
+      error.textContent = '';
+      mostrarAdmin();
+    } else {
+      input.classList.add('error');
+      error.textContent = 'Clave incorrecta. Intenta de nuevo.';
+      input.value = '';
+      setTimeout(() => input.classList.remove('error'), 400);
+    }
+  };
+
+  // Verificar al cargar
+  if (sesionValida()) {
+    mostrarAdmin();
+  } else {
+    ocultarAdmin();
+  }
+})();
+</script>
+
+<!-- MODAL MAPA ADMIN -->
+<div class="modal-mapa-bg" id="modal-mapa-bg" onclick="if(event.target===this)cerrarMapaAdmin()">
+  <div class="modal-mapa">
+    <div class="modal-mapa-header">
+      <span style="font-size:20px;">🗺️</span>
+      <div class="modal-mapa-title" id="modal-mapa-title">Mapa de unidad</div>
+      <button class="modal-mapa-close" onclick="cerrarMapaAdmin()">✕</button>
+    </div>
+    <div id="admin-mapa"></div>
+    <div class="modal-mapa-info">
+      <div class="mmi-item"><div class="mmi-dot" style="background:#f97316;"></div>Unidad</div>
+      <div class="mmi-item"><div class="mmi-dot" style="background:#22c55e;"></div>Paradas</div>
+      <div class="mmi-item"><div class="mmi-dot" style="background:#f97316;width:8px;height:8px;opacity:.4;"></div>Ya pasaron</div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>BusetaTrack — Conductor</title>
+<link rel="stylesheet" href="styles.css">
+<style>
+  body { display:flex; flex-direction:column; align-items:center; }
+  .screen { display:none; flex-direction:column; width:100%; max-width:430px; min-height:100vh; background:var(--bg); }
+  .screen.active { display:flex; animation:fadeUp .3s ease; }
+
+  #inicio {
+    background:radial-gradient(ellipse at 50% 20%,rgba(59,130,246,.12) 0%,transparent 65%),var(--bg);
+    align-items:center; justify-content:center; padding:0 24px 40px;
+  }
+  .logo-cond { display:flex; flex-direction:column; align-items:center; gap:10px; padding:48px 0 32px; }
+  .logo-cond .icon { font-size:64px; }
+  .logo-cond h1 { font-family:'Syne',sans-serif; font-weight:800; font-size:26px; text-align:center; }
+  .logo-cond p  { font-size:14px; color:var(--muted); text-align:center; line-height:1.5; }
+
+  .info-box {
+    width:100%; background:var(--surface); border:1px solid var(--border);
+    border-radius:16px; padding:18px; margin-bottom:16px;
+  }
+  .info-box-label { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:1.5px; margin-bottom:10px; font-weight:600; }
+  .info-row { display:flex; align-items:center; gap:12px; padding:8px 0; border-bottom:1px solid var(--border); }
+  .info-row:last-child { border:none; }
+  .info-row-icon { font-size:20px; width:32px; text-align:center; flex-shrink:0; }
+  .info-row-text { flex:1; }
+  .info-row-text strong { font-family:'Syne',sans-serif; font-size:14px; font-weight:700; display:block; }
+  .info-row-text span   { font-size:12px; color:var(--muted); }
+
+  .turno-detected {
+    width:100%; border-radius:14px; padding:14px 16px; margin-bottom:12px;
+    display:flex; align-items:center; gap:12px;
+    background:rgba(249,115,22,.1); border:1px solid rgba(249,115,22,.3);
+  }
+  .turno-detected .td-icon { font-size:28px; }
+  .turno-detected h4 { font-family:'Syne',sans-serif; font-weight:700; font-size:15px; }
+  .turno-detected p  { font-size:12px; color:var(--muted); margin-top:2px; }
+
+  .unidad-selector { width:100%; }
+  .unidad-card {
+    background:var(--surface); border:2px solid var(--border); border-radius:14px;
+    padding:16px; cursor:pointer; transition:all .2s; display:flex; align-items:center; gap:14px;
+    margin-bottom:10px;
+  }
+  .unidad-card:hover,.unidad-card:active { border-color:var(--blue); background:rgba(59,130,246,.06); }
+  .unidad-card.sel { border-color:var(--blue); background:rgba(59,130,246,.1); }
+  .u-icon { font-size:24px; width:44px; height:44px; background:var(--surface2); border-radius:10px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .u-info h4 { font-family:'Syne',sans-serif; font-weight:700; font-size:14px; }
+  .u-info p  { font-size:12px; color:var(--muted); margin-top:3px; }
+  .u-check   { margin-left:auto; color:var(--blue); font-size:18px; display:none; }
+  .unidad-card.sel .u-check { display:block; }
+
+  /* EN RUTA */
+  .stop-controls { margin:16px 20px 0; display:flex; gap:10px; }
+  .stop-btn { flex:1; padding:14px; border-radius:12px; border:none; cursor:pointer; font-family:'Syne',sans-serif; font-size:14px; font-weight:700; transition:all .2s; }
+  .stop-btn-prev { background:var(--surface2); color:var(--muted); }
+  .stop-btn-next { background:var(--accent); color:white; }
+  .stop-btn:disabled { opacity:.35; cursor:not-allowed; }
+</style>
+</head>
+<body>
+
+<!-- ══ INICIO: selección automática con mínima interacción ══ -->
+<div class="screen active" id="inicio">
+  <div class="logo-cond">
+    <div class="icon">🚌</div>
+    <h1>Panel Conductor</h1>
+    <p>Tu ruta y turno se detectan automáticamente. Solo selecciona tu unidad y arranca.</p>
+  </div>
+
+  <!-- Turno detectado automáticamente -->
+  <div class="turno-detected" id="turno-banner">
+    <div class="td-icon" id="td-icon">🌅</div>
+    <div>
+      <h4 id="td-titulo">Turno 6:00 AM</h4>
+      <p id="td-desc">Detectado por hora actual</p>
+    </div>
+  </div>
+
+  <!-- Info de la ruta asignada a la unidad -->
+  <div class="info-box" id="info-unidad-box" style="display:none;">
+    <div class="info-box-label">Detalle de tu ruta</div>
+    <div class="info-row">
+      <div class="info-row-icon">🛣️</div>
+      <div class="info-row-text"><strong id="info-ruta-nombre">—</strong><span>Ruta asignada</span></div>
+    </div>
+    <div class="info-row">
+      <div class="info-row-icon">📍</div>
+      <div class="info-row-text"><strong id="info-paradas-count">—</strong><span>paradas en esta ruta</span></div>
+    </div>
+    <div class="info-row">
+      <div class="info-row-icon">⏰</div>
+      <div class="info-row-text"><strong id="info-horarios">—</strong><span>Horarios de la ruta</span></div>
+    </div>
+  </div>
+
+  <!-- Selección de unidad -->
+  <div class="sec-label" style="align-self:flex-start;padding:0 0 10px;">Selecciona tu unidad</div>
+  <div class="unidad-selector" id="unidades-list">
+    <div class="empty"><div class="empty-icon">⏳</div><p>Cargando unidades…</p></div>
+  </div>
+
+  <button class="big-btn btn-primary" id="iniciar-btn" style="margin:16px 0 0;width:100%;" disabled>
+    🚀 Iniciar ruta
+  </button>
+  <div class="bottom-note" style="text-align:center;padding:12px 0 0;font-size:12px;color:var(--muted);">
+    Tu GPS se comparte automáticamente con los empleados al iniciar
+  </div>
+</div>
+
+<!-- ══ EN RUTA ══ -->
+<div class="screen" id="en-ruta">
+  <div class="app-header">
+    <div style="flex:1;">
+      <div class="header-title" id="c-header-title">Ruta</div>
+      <div class="header-sub"   id="c-header-sub">—</div>
+    </div>
+    <div class="live-badge"><span class="live-dot"></span>GPS</div>
+  </div>
+
+  <div class="gps-card">
+    <div class="gps-dot" id="c-gps-dot"></div>
+    <div class="gps-info" style="flex:1;">
+      <h4 id="c-gps-estado">Obteniendo GPS…</h4>
+      <p  id="c-gps-parada">Parada actual: —</p>
+      <div class="gps-coords" id="c-gps-coords">—</div>
+    </div>
+    <div class="spinner" id="c-spinner"></div>
+  </div>
+
+  <div class="prog-wrap">
+    <div class="prog-bg"><div class="prog-fill" id="c-prog" style="width:0%"></div></div>
+    <div class="prog-labels"><span>Inicio</span><span id="c-prog-pct">0%</span><span>Empresa</span></div>
+  </div>
+
+  <div class="info-grid">
+    <div class="info-card"><div class="ic-label">Parada actual</div><div class="ic-val" id="c-stop-n">1</div><div class="ic-sub" id="c-stop-of">de —</div></div>
+    <div class="info-card"><div class="ic-label">Siguiente</div><div class="ic-val" id="c-next" style="font-size:13px;">—</div><div class="ic-sub">próxima parada</div></div>
+  </div>
+
+  <!-- Avance manual de parada -->
+  <div class="stop-controls">
+    <button class="stop-btn stop-btn-prev" id="btn-prev" onclick="cambiarParada(-1)">‹ Anterior</button>
+    <button class="stop-btn stop-btn-next" id="btn-next" onclick="cambiarParada(1)">Siguiente ›</button>
+  </div>
+  <div style="text-align:center;font-size:11px;color:var(--muted);padding:8px 20px 0;">
+    Avanza manualmente si el GPS no detecta la parada automáticamente
+  </div>
+
+  <div class="sec" style="padding-top:16px;"><div class="sec-label">Paradas de la ruta</div></div>
+  <div class="paradas-wrap" id="c-paradas"></div>
+  <div style="height:12px;"></div>
+  <button class="big-btn btn-danger" style="margin-bottom:0;width:calc(100% - 40px);" onclick="finalizarRuta()">⏹ Finalizar ruta</button>
+  <div class="gap"></div>
+</div>
+
+<script type="module">
+import { dbGetRuta, dbGetUnidades, dbOnRutas, dbOnUnidades,
+         dbSetGPS, dbClearGPS, paradaMasCercana, detectarTurno, turnoLabel } from './db.js';
+
+let C = { unidad:null, turno:null, ruta:null, stopIdx:0, gpsWatch:null };
+
+// ─── INIT ────────────────────────────────────────────────────────────────────
+function init() {
+  C.turno = detectarTurno();
+  renderTurnoBanner();
+  // Loading mientras llegan datos de Firestore
+  document.getElementById('unidades-list').innerHTML =
+    '<div style="text-align:center;padding:20px;color:var(--muted);font-size:13px;">⏳ Cargando unidades…</div>';
+  // Escuchar rutas y unidades en tiempo real desde Firestore
+  dbOnRutas(() => {
+    if (C.unidad) C.ruta = dbGetRuta(C.unidad.ruta);
+  });
+  dbOnUnidades(() => renderUnidades());
+}
+
+function renderTurnoBanner() {
+  const iconos  = { '6am':'🌅', '2pm':'☀️', '6pm':'🌆', '10pm':'🌙' };
+  const titulos = { '6am':'Turno 6:00 AM', '2pm':'Turno 2:00 PM', '6pm':'Turno 6:00 PM', '10pm':'Turno 10:00 PM' };
+  const descs   = { '6am':'Entrada de la mañana', '2pm':'Entrada de la tarde', '6pm':'Entrada de la noche', '10pm':'Entrada de la madrugada' };
+  document.getElementById('td-icon').textContent   = iconos[C.turno];
+  document.getElementById('td-titulo').textContent = titulos[C.turno];
+  document.getElementById('td-desc').textContent   = descs[C.turno];
+}
+
+// ─── UNIDADES ────────────────────────────────────────────────────────────────
+function renderUnidades() {
+  const unds = Object.values(dbGetUnidades()).filter(u => u.activa);
+  const wrap = document.getElementById('unidades-list');
+  if (!unds.length) {
+    wrap.innerHTML = '<div class="empty"><div class="empty-icon">🚌</div><p>No hay unidades. Configúralas en el panel Admin.</p></div>';
+    return;
+  }
+  wrap.innerHTML = unds.map(u => {
+    const ruta = dbGetRuta(u.ruta);
+    return `
+      <div class="unidad-card" id="uc-${u.id}" onclick="selUnidad('${u.id}')">
+        <div class="u-icon">🚌</div>
+        <div class="u-info">
+          <h4>${u.nombre}</h4>
+          <p>Placa ${u.placa} · ${ruta ? ruta.nombre : 'Sin ruta asignada'}</p>
+        </div>
+        <span class="u-check">✓</span>
+      </div>`;
+  }).join('');
+}
+
+window.selUnidad = function(id) {
+  C.unidad = dbGetUnidades()[id];
+  C.ruta   = C.unidad ? dbGetRuta(C.unidad.ruta) : null;
+  document.querySelectorAll('.unidad-card').forEach(el => el.classList.remove('sel'));
+  document.getElementById('uc-' + id)?.classList.add('sel');
+
+  // Mostrar info de la ruta asignada
+  if (C.ruta) {
+    document.getElementById('info-ruta-nombre').textContent   = C.ruta.nombre;
+    document.getElementById('info-paradas-count').textContent = C.ruta.paradas.length;
+    document.getElementById('info-horarios').textContent      = C.ruta.horarios.map(turnoLabel).join(', ');
+    document.getElementById('info-unidad-box').style.display  = 'block';
+  }
+
+  document.getElementById('iniciar-btn').disabled = !C.unidad;
+};
+
+// ─── INICIAR RUTA ────────────────────────────────────────────────────────────
+document.getElementById('iniciar-btn').onclick = function() {
+  if (!C.unidad || !C.ruta) return;
+  C.stopIdx = 0;
+  document.getElementById('c-header-title').textContent = 'Ruta ' + C.ruta.nombre;
+  document.getElementById('c-header-sub').textContent   = C.unidad.nombre + ' · Turno ' + turnoLabel(C.turno);
+  document.getElementById('c-stop-of').textContent      = 'de ' + C.ruta.paradas.length;
+  renderParadas();
+  actualizarUI();
+  iniciarGPS();
+  goTo('en-ruta');
+};
+
+// ─── WAKE LOCK (evitar que el celular duerma) ─────────────────────────────────
+let _wakeLock = null;
+async function pedirWakeLock() {
+  if (!('wakeLock' in navigator)) return;
+  try {
+    _wakeLock = await navigator.wakeLock.request('screen');
+    // Si se libera (ej: app va al fondo), re-adquirir cuando vuelve
+    _wakeLock.addEventListener('release', () => {
+      document.getElementById('c-gps-estado').textContent = 'GPS Activo — pantalla reactivada';
+    });
+    document.addEventListener('visibilitychange', async () => {
+      if (document.visibilityState === 'visible' && C.ruta) {
+        try { _wakeLock = await navigator.wakeLock.request('screen'); } catch(_) {}
+      }
+    });
+  } catch(e) {
+    console.warn('Wake Lock no disponible:', e);
+  }
+}
+function liberarWakeLock() {
+  if (_wakeLock) { _wakeLock.release(); _wakeLock = null; }
+}
+
+// ─── GPS con detección por proximidad (20 metros) ─────────────────────────────
+// Estado: 'en_parada' | 'en_camino'
+// Solo avanza a la SIGUIENTE parada cuando está a ≤20m de ella
+// No puede retroceder a paradas ya completadas
+
+const RADIO_METROS = 20;
+
+function metrosEntre(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function iniciarGPS() {
+  if (!navigator.geolocation) { modoManual('GPS no disponible'); return; }
+  pedirWakeLock();
+  programarReset();
+  document.getElementById('c-gps-estado').textContent = 'Obteniendo señal GPS…';
+
+  C.gpsWatch = navigator.geolocation.watchPosition(
+    pos => {
+      const lat = pos.coords.latitude, lng = pos.coords.longitude;
+      document.getElementById('c-gps-dot').classList.remove('off');
+      document.getElementById('c-gps-coords').textContent = lat.toFixed(5) + '° N, ' + Math.abs(lng).toFixed(5) + '° W';
+
+      const total    = C.ruta.paradas.length;
+      const siguiente = C.ruta.paradas[C.stopIdx]; // parada objetivo
+
+      if (siguiente) {
+        const dist = metrosEntre(lat, lng, siguiente.lat, siguiente.lng);
+
+        if (dist <= RADIO_METROS) {
+          // ✅ Llegó a la parada objetivo
+          document.getElementById('c-gps-estado').textContent = `📍 En parada — ${siguiente.nombre}`;
+          dbSetGPS(C.unidad.id, { lat, lng, stopIdx: C.stopIdx, estado: 'en_parada', ruta: C.ruta.id, turno: C.turno });
+
+          // Si no es la última, avanzar índice para apuntar a la siguiente
+          if (C.stopIdx < total - 1) {
+            C.stopIdx++;
+          }
+        } else {
+          // 🚌 En camino hacia la parada objetivo
+          const distStr = dist < 1000 ? Math.round(dist) + ' m' : (dist/1000).toFixed(1) + ' km';
+          document.getElementById('c-gps-estado').textContent = `🚌 En camino — ${distStr} a ${siguiente.nombre}`;
+          // Publicar con el índice anterior (última parada confirmada)
+          const confirmado = Math.max(0, C.stopIdx - 1);
+          dbSetGPS(C.unidad.id, { lat, lng, stopIdx: confirmado, estado: 'en_camino', ruta: C.ruta.id, turno: C.turno });
+        }
+      }
+
+      renderParadas();
+      actualizarUI();
+    },
+    err => modoManual('GPS bloqueado — modo manual'),
+    { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 }
+  );
+}
+
+function modoManual(msg) {
+  document.getElementById('c-gps-estado').textContent = msg || 'Modo manual';
+  document.getElementById('c-gps-dot').classList.add('off');
+  document.getElementById('c-spinner').style.display = 'none';
+  const p = C.ruta.paradas[0];
+  document.getElementById('c-gps-coords').textContent = p.lat.toFixed(5) + '° N, ' + Math.abs(p.lng).toFixed(5) + '° W';
+  dbSetGPS(C.unidad.id, { lat: p.lat, lng: p.lng, stopIdx: 0, estado: 'manual', ruta: C.ruta.id, turno: C.turno });
+}
+
+// ─── AUTO-RESET a las 2:30 PM ────────────────────────────────────────────────
+let _resetTimer = null;
+function programarReset() {
+  if (_resetTimer) clearTimeout(_resetTimer);
+  const ahora  = new Date();
+  const reset  = new Date();
+  reset.setHours(14, 30, 0, 0); // 2:30 PM
+  if (reset <= ahora) reset.setDate(reset.getDate() + 1); // si ya pasó, mañana
+  const ms = reset - ahora;
+  _resetTimer = setTimeout(async () => {
+    // Resetear ruta para turno nocturno
+    C.stopIdx = 0;
+    await dbSetGPS(C.unidad.id, { lat: C.ruta.paradas[0].lat, lng: C.ruta.paradas[0].lng,
+      stopIdx: 0, estado: 'reset', ruta: C.ruta.id, turno: C.turno });
+    renderParadas();
+    actualizarUI();
+    document.getElementById('c-gps-estado').textContent = '🔄 Ruta reiniciada (2:30 PM)';
+  }, ms);
+}
+
+// ─── CONTROLES MANUALES ───────────────────────────────────────────────────────
+window.cambiarParada = function(dir) {
+  const total = C.ruta.paradas.length;
+  C.stopIdx   = Math.max(0, Math.min(total - 1, C.stopIdx + dir));
+  const p     = C.ruta.paradas[C.stopIdx];
+  document.getElementById('c-gps-coords').textContent = p.lat.toFixed(5) + '° N, ' + Math.abs(p.lng).toFixed(5) + '° W';
+  dbSetGPS(C.unidad.id, { lat: p.lat, lng: p.lng, stopIdx: C.stopIdx, ruta: C.ruta.id, turno: C.turno });
+  renderParadas();
+  actualizarUI();
+};
+
+// ─── UI ──────────────────────────────────────────────────────────────────────
+function actualizarUI() {
+  const total = C.ruta.paradas.length, cur = C.stopIdx;
+  const pct   = total > 1 ? Math.round((cur / (total - 1)) * 100) : 0;
+  document.getElementById('c-prog').style.width       = pct + '%';
+  document.getElementById('c-prog-pct').textContent   = pct + '%';
+  document.getElementById('c-stop-n').textContent     = cur + 1;
+  document.getElementById('c-gps-parada').textContent = 'Parada actual: ' + C.ruta.paradas[cur].nombre;
+  document.getElementById('c-next').textContent       = cur < total - 1 ? C.ruta.paradas[cur + 1].nombre : '🏁 Llegada';
+  document.getElementById('btn-prev').disabled        = cur === 0;
+  document.getElementById('btn-next').disabled        = cur === total - 1;
+}
+
+function renderParadas() {
+  document.getElementById('c-paradas').innerHTML = C.ruta.paradas.map((p, i) => {
+    const passed = i < C.stopIdx, current = i === C.stopIdx;
+    const dotCls = passed ? 'passed' : current ? 'current' : '';
+    const badge  = passed  ? '<span class="pbadge pbadge-pass">✓ Completada</span>'
+                 : current ? '<span class="pbadge pbadge-cur">📍 Aquí ahora</span>'
+                           : '<span class="pbadge pbadge-pend">Pendiente</span>';
+    return `<div class="parada-item">
+      <div class="stop-dot ${dotCls}"><div class="di"></div></div>
+      <div class="parada-info">
+        <div class="parada-name">${p.nombre}</div>
+        <div class="parada-detail">${p.detalle}</div>
+        <div class="parada-badges">${badge}</div>
+      </div></div>`;
+  }).join('');
+}
+
+// ─── FINALIZAR ────────────────────────────────────────────────────────────────
+window.finalizarRuta = async function() {
+  if (navigator.geolocation && typeof C.gpsWatch === 'number')
+    navigator.geolocation.clearWatch(C.gpsWatch);
+  if (_resetTimer) { clearTimeout(_resetTimer); _resetTimer = null; }
+  liberarWakeLock();
+  await dbClearGPS(C.unidad.id);
+  C.unidad = null; C.ruta = null; C.stopIdx = 0;
+  document.getElementById('info-unidad-box').style.display = 'none';
+  document.querySelectorAll('.unidad-card').forEach(el => el.classList.remove('sel'));
+  document.getElementById('iniciar-btn').disabled = true;
+  goTo('inicio');
+};
+
+function goTo(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  window.scrollTo(0, 0);
+}
+
+init();
+</script>
+</body>
+</html>

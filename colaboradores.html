@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Mi Transporte</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+  body { display:flex; flex-direction:column; align-items:center; }
+  .screen { display:none; flex-direction:column; width:100%; max-width:430px; min-height:100vh; background:var(--bg); }
+  .screen.active { display:flex; animation:fadeUp .3s ease; }
+
+  /* SPLASH */
+  #splash {
+    align-items:center; justify-content:center; gap:0; padding:40px 24px;
+    background:radial-gradient(ellipse at 50% 30%,rgba(249,115,22,.12) 0%,transparent 70%),var(--bg);
+  }
+  .logo-wrap { display:flex; flex-direction:column; align-items:center; gap:12px; margin-bottom:48px; }
+  .logo-ring { width:96px; height:96px; border-radius:50%; border:2px solid rgba(249,115,22,.6); display:flex; align-items:center; justify-content:center; position:relative; }
+  .logo-ring::before { content:''; position:absolute; inset:-10px; border-radius:50%; border:1px solid rgba(249,115,22,.2); animation:ripple 2.5s infinite; }
+  .logo-ring::after  { content:''; position:absolute; inset:-22px; border-radius:50%; border:1px solid rgba(249,115,22,.1); animation:ripple 2.5s infinite .4s; }
+  @keyframes ripple { 0%{opacity:1;transform:scale(1)} 100%{opacity:0;transform:scale(1.25)} }
+  .logo-emoji { font-size:44px; }
+  .logo-title { font-family:'Syne',sans-serif; font-size:30px; font-weight:800; letter-spacing:-1px; }
+  .logo-sub   { font-size:12px; color:var(--muted); letter-spacing:3px; text-transform:uppercase; }
+  .role-label { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:2px; margin-bottom:16px; align-self:flex-start; }
+  .role-cards { display:flex; flex-direction:column; gap:12px; width:100%; }
+  .role-card  { background:var(--surface); border:1px solid var(--border); border-radius:18px; padding:20px; cursor:pointer; transition:all .2s; display:flex; align-items:center; gap:16px; }
+  .role-card:active { transform:scale(.98); }
+  .role-card:hover  { border-color:rgba(249,115,22,.5); background:var(--surface2); }
+  .role-icon { font-size:32px; width:52px; height:52px; background:var(--surface2); border-radius:14px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .role-text h3 { font-family:'Syne',sans-serif; font-weight:700; font-size:17px; }
+  .role-text p  { font-size:13px; color:var(--muted); margin-top:3px; }
+  .role-arr { margin-left:auto; color:var(--accent); font-size:22px; }
+
+
+  /* CONFIRMACIÓN DE PARADA */
+  #confirm-screen {
+    align-items:center; justify-content:center; padding:32px 24px;
+    background:radial-gradient(ellipse at 50% 25%,rgba(249,115,22,.1) 0%,transparent 65%),var(--bg);
+  }
+  .confirm-wrap { width:100%; max-width:380px; display:flex; flex-direction:column; align-items:center; gap:0; }
+  .confirm-icon { font-size:56px; margin-bottom:16px; }
+  .confirm-title { font-family:'Syne',sans-serif; font-weight:800; font-size:22px; text-align:center; margin-bottom:6px; }
+  .confirm-sub   { font-size:13px; color:var(--muted); text-align:center; margin-bottom:28px; line-height:1.5; }
+  .confirm-card  {
+    width:100%; background:var(--surface); border:2px solid rgba(249,115,22,.4);
+    border-radius:18px; padding:20px; display:flex; align-items:center; gap:14px; margin-bottom:20px;
+  }
+  .confirm-card-icon { font-size:32px; flex-shrink:0; }
+  .confirm-card-name { font-family:'Syne',sans-serif; font-weight:700; font-size:17px; }
+  .confirm-card-det  { font-size:12px; color:var(--muted); margin-top:3px; }
+  .confirm-btns  { display:flex; flex-direction:column; gap:10px; width:100%; }
+  .confirm-yes   { padding:16px; border-radius:14px; border:none; cursor:pointer; background:var(--accent); color:white; font-family:'Syne',sans-serif; font-size:15px; font-weight:700; }
+  .confirm-other { padding:14px; border-radius:14px; border:1px solid var(--border); cursor:pointer; background:var(--surface); color:var(--muted); font-family:'Syne',sans-serif; font-size:14px; font-weight:600; }
+  .confirm-gps-off { width:100%; background:var(--surface2); border:1px solid var(--border); border-radius:14px; padding:14px; font-size:13px; color:var(--muted); text-align:center; margin-bottom:16px; line-height:1.5; }
+
+  /* TRACKER */
+  #tracker { overflow:hidden; }
+
+  .status-pill { display:flex; align-items:center; gap:10px; margin:12px 16px 0; padding:14px 16px; border-radius:16px; border:1px solid transparent; }
+  .status-pill.sb-onway  { background:rgba(234,179,8,.1);   border-color:rgba(234,179,8,.3); }
+  .status-pill.sb-here   { background:rgba(249,115,22,.12); border-color:rgba(249,115,22,.4); }
+  .status-pill.sb-passed { background:rgba(239,68,68,.1);   border-color:rgba(239,68,68,.3); }
+  .status-pill.sb-off    { background:rgba(100,116,139,.08);border-color:rgba(100,116,139,.2); }
+  .sp-icon  { font-size:28px; flex-shrink:0; }
+  .sp-title { font-family:'Syne',sans-serif; font-weight:700; font-size:15px; }
+  .sp-desc  { font-size:12px; color:var(--muted); margin-top:2px; }
+
+  .info-row { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin:10px 16px 0; }
+  .ir-card  { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:10px 12px; text-align:center; }
+  .ir-val   { font-family:'Syne',sans-serif; font-size:18px; font-weight:700; line-height:1; }
+  .ir-lbl   { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.8px; margin-top:4px; }
+
+  .mi-parada-card { margin:10px 16px 0; background:var(--surface2); border:1px solid rgba(59,130,246,.3); border-radius:14px; padding:12px 14px; display:flex; align-items:center; gap:12px; }
+  .mp-icon   { font-size:22px; flex-shrink:0; }
+  .mp-info   { flex:1; min-width:0; }
+  .mp-nombre { font-family:'Syne',sans-serif; font-weight:700; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .mp-sub    { font-size:11px; color:var(--muted); margin-top:2px; }
+  .mp-change { background:none; border:1px solid var(--border); color:var(--muted); font-size:11px; padding:4px 10px; border-radius:8px; cursor:pointer; flex-shrink:0; white-space:nowrap; }
+  .mp-change:hover { border-color:var(--accent); color:var(--accent); }
+
+  .map-wrap { margin:10px 16px 0; border-radius:16px; overflow:hidden; border:1px solid var(--border); position:relative; }
+  #mapa { height:320px; width:100%; background:var(--surface2); }
+  .map-loading { position:absolute; inset:0; background:var(--surface2); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; font-size:13px; color:var(--muted); z-index:500; }
+  .map-loading .ml-spin { font-size:32px; animation:spin .8s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+
+  .map-legend { position:absolute; bottom:8px; left:8px; z-index:400; background:rgba(10,15,30,.85); border:1px solid var(--border); border-radius:10px; padding:6px 10px; font-size:10px; color:var(--muted); display:flex; flex-direction:column; gap:4px; pointer-events:none; }
+  .ml-row { display:flex; align-items:center; gap:6px; }
+  .ml-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+
+  /* SHEET selector de parada */
+  .parada-sheet-bg { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:1000; }
+  .parada-sheet-bg.open { display:flex; align-items:flex-end; justify-content:center; }
+  .parada-sheet { background:var(--surface); border-radius:20px 20px 0 0; width:100%; max-width:430px; max-height:70vh; overflow-y:auto; padding:20px; }
+  .ps-title { font-family:'Syne',sans-serif; font-weight:700; font-size:17px; margin-bottom:14px; }
+  .ps-item  { display:flex; align-items:center; gap:12px; padding:12px; border-radius:12px; cursor:pointer; border:1px solid transparent; margin-bottom:6px; }
+  .ps-item:hover, .ps-item.sel { background:var(--surface2); border-color:rgba(249,115,22,.4); }
+  .ps-num   { width:26px; height:26px; border-radius:50%; background:var(--surface3); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; color:var(--muted); flex-shrink:0; }
+  .ps-name  { font-size:14px; font-weight:500; }
+  .ps-det   { font-size:11px; color:var(--muted); margin-top:2px; }
+</style>
+</head>
+<body>
+
+<!-- SPLASH -->
+<div class="screen active" id="splash">
+  <div class="logo-wrap">
+    <div class="logo-ring"><span class="logo-emoji">🚌</span></div>
+    <div class="logo-title">Mi Transporte</div>
+    <div class="logo-sub">Seguimiento en vivo</div>
+  </div>
+  <div class="role-label">Selecciona tu ruta</div>
+  <div class="role-cards" id="rutas-list">
+    <div class="empty"><div class="empty-icon">⏳</div><p>Cargando rutas…</p></div>
+  </div>
+  <div class="bottom-note">Tu parada se detecta automáticamente por GPS</div>
+</div>
+
+
+<!-- CONFIRMACIÓN DE PARADA -->
+<div class="screen" id="confirm-screen">
+  <div class="confirm-wrap">
+    <div class="confirm-icon">📍</div>
+    <div class="confirm-title">¿En cuál parada estás?</div>
+    <div class="confirm-sub" id="cs-sub">Detectando tu ubicación…</div>
+    <div class="confirm-gps-off" id="cs-gps-off" style="display:none;">
+      📵 No pudimos detectar tu ubicación.<br>Elige tu parada manualmente.
+    </div>
+    <div class="confirm-card" id="cs-card" style="display:none;">
+      <span class="confirm-card-icon">🏘️</span>
+      <div>
+        <div class="confirm-card-name" id="cs-parada-nombre">—</div>
+        <div class="confirm-card-det"  id="cs-parada-det">—</div>
+      </div>
+    </div>
+    <div class="confirm-btns">
+      <button class="confirm-yes"   id="cs-btn-yes"   onclick="confirmarParada()"   style="display:none;">✅ Sí, estoy aquí</button>
+      <button class="confirm-other" id="cs-btn-other" onclick="elegirOtraParada()">📋 Elegir otra parada</button>
+    </div>
+  </div>
+</div>
+
+<!-- TRACKER -->
+<div class="screen" id="tracker">
+  <div class="app-header">
+    <button class="back-btn" onclick="volverInicio()">‹</button>
+    <div>
+      <div class="header-title" id="t-header-title">Ruta</div>
+      <div class="header-sub"   id="t-header-sub">—</div>
+    </div>
+    <div class="live-badge" style="margin-left:auto;"><span class="live-dot"></span>VIVO</div>
+  </div>
+
+  <div class="status-pill sb-off" id="t-status">
+    <span class="sp-icon" id="t-sp-icon">📡</span>
+    <div>
+      <div class="sp-title" id="t-sp-title">Conectando…</div>
+      <div class="sp-desc"  id="t-sp-desc">Buscando la ubicación de la unidad</div>
+    </div>
+  </div>
+
+  <div class="info-row">
+    <div class="ir-card"><div class="ir-val" id="t-rest">—</div><div class="ir-lbl">Paradas</div></div>
+    <div class="ir-card"><div class="ir-val" id="t-time">—</div><div class="ir-lbl">Est. arribo</div></div>
+    <div class="ir-card"><div class="ir-val" id="t-pct">0%</div><div class="ir-lbl">Recorrido</div></div>
+  </div>
+
+  <div class="mi-parada-card">
+    <span class="mp-icon">⭐</span>
+    <div class="mp-info">
+      <div class="mp-nombre" id="t-mi-nombre">Detectando…</div>
+      <div class="mp-sub"    id="t-mi-sub">Tu punto de recogida</div>
+    </div>
+    <button class="mp-change" onclick="abrirSelectorParada()">Cambiar</button>
+  </div>
+
+  <div class="map-wrap">
+    <div id="mapa"></div>
+    <div class="map-loading" id="map-loading">
+      <div class="ml-spin">🔄</div>
+      <div>Cargando mapa…</div>
+    </div>
+    <div class="map-legend">
+      <div class="ml-row"><div class="ml-dot" style="background:#f97316;"></div>Unidad</div>
+      <div class="ml-row"><div class="ml-dot" style="background:#ef4444;box-shadow:0 0 0 3px rgba(239,68,68,.3);"></div>Tú</div>
+      <div class="ml-row"><div class="ml-dot" style="background:#22c55e;"></div>Paradas</div>
+      <div class="ml-row"><div class="ml-dot" style="background:#3b82f6;width:14px;height:14px;"></div>Tu parada</div>
+    </div>
+  </div>
+  <div class="gap"></div>
+</div>
+
+<!-- SHEET parada manual -->
+<div class="parada-sheet-bg" id="parada-sheet-bg" onclick="if(event.target===this)cerrarSelectorParada()">
+  <div class="parada-sheet">
+    <div class="ps-title">📍 ¿En cuál parada estás?</div>
+    <div id="ps-lista"></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script type="module">
+import { dbGetRutas, dbGetRuta, dbGetUnidades, dbOnRutas, dbOnUnidades, dbOnGPS,
+         paradaMasCercana, detectarTurno, turnoLabel,
+         dbRegistrarConsulta, dbClearConsulta } from './db.js';
+
+
+// ─── ZONA DE EXCLUSIÓN ────────────────────────────────────────────────────────
+let _exclusionConfig = null;
+
+async function cargarExclusion() {
+  try {
+    const r = await fetch('https://firestore.googleapis.com/v1/projects/busetatrack/databases/(default)/documents/config/exclusion?key=AIzaSyCKMIoHaMgeyVhksXFRYS0eONEJgmj0WUM');
+    if (!r.ok) return;
+    const data = await r.json();
+    if (!data?.fields) return;
+    _exclusionConfig = {
+      lat:    data.fields.lat?.doubleValue,
+      lng:    data.fields.lng?.doubleValue,
+      radio:  parseInt(data.fields.radio?.integerValue || 150),
+      activo: data.fields.activo?.booleanValue ?? false
+    };
+  } catch(e) {}
+}
+
+function dentroDeExclusion(lat, lng) {
+  if (!_exclusionConfig?.activo || !_exclusionConfig?.lat) return false;
+  const R = 6371000;
+  const dLat = (lat - _exclusionConfig.lat) * Math.PI / 180;
+  const dLng = (lng - _exclusionConfig.lng) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(_exclusionConfig.lat*Math.PI/180)*Math.cos(lat*Math.PI/180)*Math.sin(dLng/2)**2;
+  const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return dist <= _exclusionConfig.radio;
+}
+
+cargarExclusion();
+setInterval(cargarExclusion, 5 * 60 * 1000); // recargar cada 5 min
+
+// ─── Estado global ─────────────────────────────────────────────────────────────
+let G = { ruta:null, turno:null, miParada:-1, unsubGPS:null, sesionId:null };
+let _lastGps = {};
+
+// ─── Mapa ──────────────────────────────────────────────────────────────────────
+let mapa             = null;
+let markerBus        = null;   // 🚌 Unidad (naranja)
+let markerColaborador= null;   // 📍 El colaborador (azul pulsante)
+let markersStop      = [];     // paradas (verde / azul la del usuario)
+let _paradaYaRender  = false;  // para no agregar paradas dos veces
+let _curStopActual   = -1;     // última posición conocida de la unidad
+let _placaActual     = '';
+let _latColaborador  = null;
+let _lngColaborador  = null;
+
+// ── Íconos ────────────────────────────────────────────────────────────────────
+function iconBus() {
+  return L.divIcon({
+    html:`<div style="background:#f97316;width:38px;height:38px;border-radius:50%;
+      display:flex;align-items:center;justify-content:center;font-size:20px;
+      border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,.5);">🚌</div>`,
+    iconSize:[38,38], iconAnchor:[19,19], className:''
+  });
+}
+
+function iconParada(esLaMia) {
+  const color = esLaMia ? '#3b82f6' : '#22c55e';
+  const size  = esLaMia ? 16 : 10;
+  return L.divIcon({
+    html:`<div style="background:${color};width:${size}px;height:${size}px;
+      border-radius:50%;border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,.4);"></div>`,
+    iconSize:[size,size], iconAnchor:[size/2,size/2], className:''
+  });
+}
+
+function iconColaborador() {
+  return L.divIcon({
+    html:`<div style="background:#ef4444;width:16px;height:16px;border-radius:50%;
+      border:3px solid white;box-shadow:0 0 0 5px rgba(239,68,68,.3);"></div>`,
+    iconSize:[16,16], iconAnchor:[8,8], className:''
+  });
+}
+
+// ── Init mapa ─────────────────────────────────────────────────────────────────
+function initMapa(centro) {
+  if (mapa) { setTimeout(() => mapa.invalidateSize(), 50); return; }
+  const c = centro || [10.0, -84.12];
+  mapa = L.map('mapa', { center:c, zoom:14, zoomControl:true, attributionControl:true });
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom:19, attribution:'© OpenStreetMap'
+  }).addTo(mapa);
+  document.getElementById('map-loading').style.display = 'none';
+}
+
+// ── Íconos de parada según estado ────────────────────────────────────────────
+function iconParadaEstado(esLaMia, pasada, actual) {
+  let color, size;
+  if (esLaMia && pasada)  { color='#ef4444'; size=16; } // mi parada ya pasó → rojo
+  else if (esLaMia)        { color='#3b82f6'; size=16; } // mi parada pendiente → azul
+  else if (actual)         { color='#f97316'; size=12; } // parada actual de la unidad → naranja
+  else if (pasada)         { color='#374151'; size=8;  } // pasada → gris oscuro
+  else                     { color='#22c55e'; size=10; } // pendiente → verde
+  return L.divIcon({
+    html:`<div style="background:${color};width:${size}px;height:${size}px;border-radius:50%;border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,.4);opacity:${pasada && !esLaMia ? '.5' : '1'};"></div>`,
+    iconSize:[size,size], iconAnchor:[size/2,size/2], className:''
+  });
+}
+
+// ── Poner paradas en el mapa (solo una vez por ruta) ─────────────────────────
+function ponerParadasEnMapa(paradas, miIdx) {
+  if (!mapa || _paradaYaRender) return;
+  _paradaYaRender = true;
+  paradas.forEach((p, i) => {
+    const esLaMia = i === miIdx;
+    const m = L.marker([p.lat, p.lng], { icon: iconParadaEstado(esLaMia, false, false) })
+      .addTo(mapa)
+      .bindPopup(`<b>${esLaMia ? '⭐ ' : ''}${p.nombre}</b><br><small>${p.detalle}</small>`);
+    markersStop.push(m);
+  });
+  const bounds = L.latLngBounds(paradas.map(p => [p.lat, p.lng]));
+  mapa.fitBounds(bounds, { padding:[30,30], maxZoom:15 });
+}
+
+// ── Actualizar colores de paradas según posición de la unidad ────────────────
+function actualizarEstadoParadas(curStop, miIdx, paradas) {
+  markersStop.forEach((m, i) => {
+    const pasada = i < curStop;
+    const actual = i === curStop;
+    const esLaMia = i === miIdx;
+    m.setIcon(iconParadaEstado(esLaMia, pasada, actual));
+    // Actualizar popup con estado
+    let estado = pasada ? '✓ Ya pasó' : actual ? '📍 Aquí ahora' : '⏳ Pendiente';
+    if (esLaMia) estado += ' — ⭐ Tu parada';
+    m.bindPopup(`<b>${paradas[i].nombre}</b><br><small>${paradas[i].detalle}</small><br><span style="font-size:11px;color:#64748b;">${estado}</span>`);
+  });
+}
+
+// ── Actualizar marcador de la unidad ─────────────────────────────────────────
+function actualizarMarcadorBus(lat, lng) {
+  if (!mapa) return;
+  // Si está en zona de exclusión, ocultar el marcador
+  if (dentroDeExclusion(lat, lng)) {
+    if (markerBus) { mapa.removeLayer(markerBus); markerBus = null; }
+    return;
+  }
+  if (!markerBus) {
+    markerBus = L.marker([lat, lng], { icon:iconBus(), zIndexOffset:1000 }).addTo(mapa);
+  } else {
+    markerBus.setLatLng([lat, lng]);
+  }
+  markerBus.bindPopup(`<b>🚌 Unidad ${_placaActual}</b>`);
+}
+
+// ── Actualizar marcador del colaborador ──────────────────────────────────────
+function actualizarMarcadorColaborador() {
+  if (!mapa || _latColaborador === null) return;
+  if (!markerColaborador) {
+    markerColaborador = L.marker([_latColaborador, _lngColaborador], { icon:iconColaborador(), zIndexOffset:900 })
+      .addTo(mapa).bindPopup('<b>📍 Tú estás aquí</b>');
+  } else {
+    markerColaborador.setLatLng([_latColaborador, _lngColaborador]);
+  }
+}
+
+// ── Actualizar iconos de paradas al cambiar mi parada ────────────────────────
+function actualizarIconosParadas(miIdx, curStop) {
+  if (!G.ruta) return;
+  const cs = curStop ?? _curStopActual ?? -1;
+  markersStop.forEach((m, i) => {
+    const pasada = i < cs;
+    const actual = i === cs;
+    m.setIcon(iconParadaEstado(i === miIdx, pasada, actual));
+  });
+}
+
+// ── Limpiar todo al volver ────────────────────────────────────────────────────
+function limpiarMarcadoresMapa() {
+  if (markerBus)         { mapa?.removeLayer(markerBus);         markerBus = null; }
+  if (markerColaborador) { mapa?.removeLayer(markerColaborador); markerColaborador = null; }
+  markersStop.forEach(m => mapa?.removeLayer(m));
+  markersStop        = [];
+  _paradaYaRender    = false;
+  _latColaborador    = null;
+  _lngColaborador    = null;
+  _placaActual       = '';
+}
+
+// ─── Navegación ───────────────────────────────────────────────────────────────
+function goTo(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  window.scrollTo(0, 0);
+  if (id === 'tracker') {
+    const centro = G.ruta?.paradas?.[0] ? [G.ruta.paradas[0].lat, G.ruta.paradas[0].lng] : null;
+    setTimeout(() => {
+      initMapa(centro);
+      // Poner paradas y dibujar unidad con el último GPS conocido
+      if (G.ruta?.paradas?.length) ponerParadasEnMapa(G.ruta.paradas, G.miParada);
+      actualizarMarcadorColaborador();
+      // Redibujar la unidad si ya hay datos GPS cargados
+      if (Object.keys(_lastGps).length) refreshTracker(_lastGps);
+    }, 300);
+  }
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+function init() {
+  G.turno = detectarTurno();
+  dbOnRutas(() => renderRutas());
+  dbOnUnidades(() => {});
+}
+
+function renderRutas() {
+  const rutas = Object.values(dbGetRutas()).filter(r => r.activa);
+  const list  = document.getElementById('rutas-list');
+  if (!rutas.length) {
+    list.innerHTML = '<div class="empty"><div class="empty-icon">🚌</div><p>No hay rutas disponibles</p></div>';
+    return;
+  }
+  list.innerHTML = rutas.map(r => `
+    <div class="role-card" onclick="window._selRuta('${r.id}')">
+      <div class="role-icon">🏘️</div>
+      <div class="role-text">
+        <h3>${r.nombre}</h3>
+        <p>${r.paradas.length} paradas · ${r.horarios.map(turnoLabel).join(', ')}</p>
+      </div>
+      <span class="role-arr">›</span>
+    </div>`).join('');
+}
+
+// ─── Selección de ruta ────────────────────────────────────────────────────────
+window._selRuta = async function(rutaId) {
+  G.ruta  = dbGetRuta(rutaId);
+  G.turno = detectarTurno();
+  if (!G.ruta) return;
+
+  document.getElementById('t-header-title').textContent = G.ruta.nombre;
+  document.getElementById('t-header-sub').textContent   = 'Turno ' + turnoLabel(G.turno);
+  document.getElementById('t-mi-nombre').textContent    = 'Detectando…';
+  document.getElementById('t-mi-sub').textContent       = '¿En cuál parada estás?';
+
+  G.sesionId = await dbRegistrarConsulta(rutaId, G.turno);
+  limpiarMarcadoresMapa();
+  if (G.unsubGPS) G.unsubGPS();
+  G.unsubGPS = dbOnGPS(gpsData => refreshTracker(gpsData));
+  goTo('confirm-screen');
+  detectarMiParadaConConfirmacion();
+};
+
+window.volverInicio = async function() {
+  if (G.unsubGPS) { G.unsubGPS(); G.unsubGPS = null; }
+  if (G.sesionId) { await dbClearConsulta(G.sesionId); G.sesionId = null; }
+  G.ruta = null; G.miParada = -1;
+  limpiarMarcadoresMapa();
+  goTo('splash');
+};
+
+window.addEventListener('beforeunload', () => {
+  if (G.sesionId) dbClearConsulta(G.sesionId);
+});
+
+// ─── GPS del colaborador con confirmación ────────────────────────────────────
+function detectarMiParadaConConfirmacion() {
+  const sub      = document.getElementById('cs-sub');
+  const card     = document.getElementById('cs-card');
+  const gpsOff   = document.getElementById('cs-gps-off');
+  const btnYes   = document.getElementById('cs-btn-yes');
+
+  sub.textContent = 'Detectando tu ubicación…';
+  card.style.display = 'none'; btnYes.style.display = 'none';
+  gpsOff.style.display = 'none';
+
+  if (!navigator.geolocation) {
+    gpsOff.style.display = 'block';
+    sub.textContent = '';
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      _latColaborador = pos.coords.latitude;
+      _lngColaborador = pos.coords.longitude;
+      const idx = paradaMasCercana(_latColaborador, _lngColaborador, G.ruta.paradas);
+      const p   = G.ruta.paradas[idx];
+      G._paradaSugerida = idx;
+
+      document.getElementById('cs-parada-nombre').textContent = p.nombre;
+      document.getElementById('cs-parada-det').textContent    = p.detalle;
+      sub.textContent        = 'Detectamos que estás cerca de:';
+      card.style.display     = 'flex';
+      btnYes.style.display   = 'block';
+      gpsOff.style.display   = 'none';
+    },
+    () => {
+      gpsOff.style.display = 'block';
+      sub.textContent      = '';
+      btnYes.style.display = 'none';
+      card.style.display   = 'none';
+    }
+  );
+}
+
+window.confirmarParada = function() {
+  setMiParada(G._paradaSugerida ?? 0, true);
+  goTo('tracker');
+};
+
+window.elegirOtraParada = function() {
+  // Mostrar sheet de selección encima de la pantalla confirm
+  if (!G.ruta) return;
+  document.getElementById('ps-lista').innerHTML = G.ruta.paradas.map((p, i) => `
+    <div class="ps-item" onclick="window._elegirParadaDesdeConfirm(${i})">
+      <div class="ps-num">${i + 1}</div>
+      <div><div class="ps-name">${p.nombre}</div><div class="ps-det">${p.detalle}</div></div>
+    </div>`).join('');
+  document.getElementById('parada-sheet-bg').classList.add('open');
+};
+
+window._elegirParadaDesdeConfirm = function(idx) {
+  document.getElementById('parada-sheet-bg').classList.remove('open');
+  setMiParada(idx, false);
+  goTo('tracker');
+};
+
+function setMiParada(idx, porGPS) {
+  G.miParada = idx;
+  const p = G.ruta.paradas[idx];
+  document.getElementById('t-mi-nombre').textContent = p.nombre;
+  document.getElementById('t-mi-sub').textContent    = porGPS ? '📍 Detectada por GPS' : '📍 ' + p.detalle;
+  actualizarIconosParadas(idx, _curStopActual);
+  refreshTracker(_lastGps);
+}
+
+// ─── Selector manual ──────────────────────────────────────────────────────────
+window.abrirSelectorParada = function() {
+  if (!G.ruta) return;
+  document.getElementById('ps-lista').innerHTML = G.ruta.paradas.map((p, i) => `
+    <div class="ps-item ${i === G.miParada ? 'sel' : ''}" onclick="window._elegirParada(${i})">
+      <div class="ps-num">${i + 1}</div>
+      <div><div class="ps-name">${p.nombre}</div><div class="ps-det">${p.detalle}</div></div>
+    </div>`).join('');
+  document.getElementById('parada-sheet-bg').classList.add('open');
+};
+
+window._elegirParada = function(idx) {
+  document.getElementById('parada-sheet-bg').classList.remove('open');
+  setMiParada(idx, false);
+};
+
+window.cerrarSelectorParada = function() {
+  document.getElementById('parada-sheet-bg').classList.remove('open');
+};
+
+// ─── Refresh tracker ──────────────────────────────────────────────────────────
+function refreshTracker(gpsAll) {
+  _lastGps = gpsAll;
+  if (!G.ruta) return;
+
+  const paradas = G.ruta.paradas, total = paradas.length;
+  const now     = Date.now();
+  const todasU  = Object.values(dbGetUnidades()).filter(u => u.activa);
+  let gpsData = null, unidad = null;
+
+  // Buscar por unidad asignada a la ruta
+  for (const u of todasU.filter(u => u.ruta === G.ruta.id)) {
+    if (gpsAll[u.id] && (now - gpsAll[u.id].ts < 90000)) { gpsData = gpsAll[u.id]; unidad = u; break; }
+  }
+  // Fallback: buscar por campo 'ruta' en el doc GPS (Powerfleet bridge)
+  if (!gpsData) {
+    for (const [gid, g] of Object.entries(gpsAll)) {
+      if ((now - g.ts < 90000) && g.ruta === G.ruta.id) {
+        gpsData = g; unidad = todasU.find(u => u.id === gid) || null; break;
+      }
+    }
+  }
+
+  const sb    = document.getElementById('t-status');
+  const icon  = document.getElementById('t-sp-icon');
+  const title = document.getElementById('t-sp-title');
+  const desc  = document.getElementById('t-sp-desc');
+
+  // Verificar zona de exclusión
+  const enExclusion = gpsData?.lat && dentroDeExclusion(gpsData.lat, gpsData.lng);
+
+  if (!gpsData || enExclusion) {
+    sb.className = 'status-pill sb-off';
+    icon.textContent  = '📡';
+    title.textContent = 'Unidad sin señal';
+    desc.textContent  = 'La unidad aún no inició o no tiene conexión';
+    document.getElementById('t-rest').textContent = '—';
+    document.getElementById('t-time').textContent = '—';
+    document.getElementById('t-pct').textContent  = '0%';
+    // Mostrar paradas aunque no haya GPS de la unidad
+    if (mapa && G.ruta?.paradas?.length) ponerParadasEnMapa(paradas, G.miParada);
+    return;
+  }
+
+  const curStop = Math.max(0, Math.min(gpsData.stopIdx ?? 0, total - 1));
+  _curStopActual = curStop; // guardar para actualizarIconosParadas
+  const diff    = G.miParada >= 0 ? G.miParada - curStop : null;
+  const pct     = total > 1 ? Math.round((curStop / (total - 1)) * 100) : 0;
+
+  document.getElementById('t-pct').textContent = pct + '%';
+
+  if (diff === null) {
+    sb.className = 'status-pill sb-onway';
+    icon.textContent = '🚌'; title.textContent = 'Unidad en camino';
+    desc.textContent = 'Detectando tu parada…';
+    document.getElementById('t-rest').textContent = '—';
+    document.getElementById('t-time').textContent = '—';
+  } else if (diff > 0) {
+    sb.className = 'status-pill sb-onway';
+    icon.textContent = '🚌'; title.textContent = 'Unidad en camino';
+    desc.textContent = `${diff} parada${diff > 1 ? 's' : ''} antes de la tuya`;
+    document.getElementById('t-rest').textContent = diff;
+    document.getElementById('t-time').textContent = '~' + (diff * 4) + ' min';
+  } else if (diff === 0) {
+    sb.className = 'status-pill sb-here';
+    icon.textContent = '🚨'; title.textContent = '¡La unidad está aquí!';
+    desc.textContent = 'Dirígete al punto de recogida ahora mismo';
+    document.getElementById('t-rest').textContent = '0';
+    document.getElementById('t-time').textContent = '¡YA!';
+  } else {
+    sb.className = 'status-pill sb-passed';
+    icon.textContent = '⚠️'; title.textContent = 'La unidad ya pasó';
+    desc.textContent = 'Espera el próximo turno o contacta al conductor';
+    document.getElementById('t-rest').textContent = '—';
+    document.getElementById('t-time').textContent = 'Pasó';
+  }
+
+  // Actualizar placa y mapa
+  _placaActual = unidad?.placa || '';
+  if (gpsData.lat && gpsData.lng) {
+    ponerParadasEnMapa(paradas, G.miParada);
+    actualizarEstadoParadas(curStop, G.miParada, paradas);
+    actualizarMarcadorBus(gpsData.lat, gpsData.lng);
+    actualizarMarcadorColaborador();
+  }
+}
+
+init();
+</script>
+</body>
+</html>

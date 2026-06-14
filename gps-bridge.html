@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>GPS Bridge — MIX Telematics</title>
+<style>
+  :root {
+    --bg:       #0f1117;
+    --surface:  #1a1d27;
+    --surface2: #22263a;
+    --border:   rgba(255,255,255,.08);
+    --text:     #e8eaf0;
+    --muted:    #6b7280;
+    --accent:   #7c3aed;
+    --green:    #22c55e;
+    --red:      #ef4444;
+    --blue:     #3b82f6;
+    --yellow:   #eab308;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:'DM Sans',system-ui,sans-serif;
+         max-width:480px; margin:0 auto; padding-bottom:40px; }
+
+  .header { display:flex; align-items:center; gap:12px; padding:20px 16px 12px;
+            border-bottom:1px solid var(--border); }
+  .header-title { font-size:17px; font-weight:700; letter-spacing:-.3px; }
+  .badge { margin-left:auto; font-size:11px; font-weight:600; padding:4px 10px;
+           border-radius:20px; background:var(--surface2); color:var(--muted); }
+  .badge.on   { background:rgba(34,197,94,.15); color:var(--green); }
+  .badge.pause{ background:rgba(234,179,8,.12);  color:var(--yellow); }
+
+  .box { margin:12px 16px; background:var(--surface); border:1px solid var(--border);
+         border-radius:14px; padding:14px; }
+  .box h3 { font-size:13px; color:var(--muted); text-transform:uppercase;
+            letter-spacing:.6px; margin-bottom:10px; }
+
+  .info-row { display:flex; justify-content:space-between; align-items:center;
+              padding:5px 0; border-bottom:1px solid var(--border); font-size:12px; }
+  .info-row:last-child { border:none; }
+  .info-row span { color:var(--muted); }
+  .info-row strong { color:var(--text); font-weight:600; }
+
+  .warn { margin:12px 16px; background:rgba(234,179,8,.07);
+          border:1px solid rgba(234,179,8,.2); border-radius:12px;
+          padding:12px 14px; font-size:12px; color:var(--muted); line-height:1.6; }
+  .warn strong { color:var(--yellow); }
+
+  .unit-card { margin:8px 16px; background:var(--surface); border:1px solid var(--border);
+               border-radius:14px; padding:14px; }
+  .unit-head { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+  .dot { width:10px; height:10px; border-radius:50%; background:var(--muted); flex-shrink:0; }
+  .dot.ok  { background:var(--green); box-shadow:0 0 6px var(--green); }
+  .dot.err { background:var(--red);   box-shadow:0 0 6px var(--red); }
+  .unit-name { font-size:14px; font-weight:700; }
+  .unit-sub  { font-size:11px; color:var(--muted); margin-top:1px; }
+  .unit-stop { font-size:12px; color:var(--text); margin-bottom:2px; }
+  .unit-dist { font-size:11px; color:var(--blue); }
+  .coords    { font-size:11px; color:var(--muted); margin-top:4px; }
+  .ts        { font-size:10px; color:var(--muted); margin-top:2px; }
+  .reset-btn { margin-left:auto; font-size:11px; background:var(--surface2);
+               border:1px solid var(--border); color:var(--muted); border-radius:8px;
+               padding:4px 10px; cursor:pointer; }
+  .reset-btn:hover { color:var(--text); }
+
+  .horario-card { margin:8px 16px; background:var(--surface2);
+                  border:1px solid var(--border); border-radius:12px;
+                  padding:12px; font-size:12px; color:var(--muted); }
+  .horario-card h4 { font-size:12px; color:var(--text); margin-bottom:8px; font-weight:700;
+                     display:flex; align-items:center; justify-content:space-between; }
+  .horario-row { display:flex; justify-content:space-between; padding:3px 0;
+                 border-bottom:1px solid var(--border); }
+  .horario-row:last-child { border:none; }
+  .horario-activo { color:var(--green); font-weight:600; }
+
+  .log { margin:0 16px 16px; background:var(--surface2); border:1px solid var(--border);
+         border-radius:12px; padding:12px; max-height:240px; overflow-y:auto; }
+  .log-line { font-family:monospace; font-size:11px; color:var(--muted); margin-bottom:3px; }
+  .log-line.ok   { color:var(--green); }
+  .log-line.err  { color:var(--red); }
+  .log-line.info { color:var(--blue); }
+
+  .btn { display:block; width:calc(100% - 32px); margin:8px 16px;
+         padding:14px; border-radius:14px; border:none; cursor:pointer;
+         font-size:15px; font-weight:700; font-family:inherit; transition:all .2s; }
+  .btn-primary { background:var(--accent); color:#fff; }
+  .btn-primary:hover { opacity:.9; }
+  .btn-danger  { background:rgba(239,68,68,.15); color:var(--red);
+                 border:1px solid rgba(239,68,68,.3); }
+  .btn-danger:hover { background:rgba(239,68,68,.25); }
+
+  .debug-box { margin:0 16px 10px; background:var(--surface2); border:1px solid var(--border);
+               border-radius:12px; padding:12px; font-size:11px; color:var(--muted); }
+  .debug-box h4 { font-size:12px; color:var(--text); margin-bottom:6px; }
+
+  .sec-label { font-size:11px; color:var(--muted); text-transform:uppercase;
+               letter-spacing:.6px; padding:12px 16px 4px; }
+
+  /* Rate limit bar */
+  .rate-bar { margin:8px 16px; }
+  .rate-bar-label { font-size:11px; color:var(--muted); display:flex;
+                    justify-content:space-between; margin-bottom:4px; }
+  .rate-track { height:6px; background:var(--surface2); border-radius:3px; overflow:hidden; }
+  .rate-fill  { height:100%; border-radius:3px; background:var(--green);
+                transition:width .4s, background .4s; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <span style="font-size:22px;">🛰️</span>
+  <div>
+    <div class="header-title">GPS Bridge</div>
+    <div style="font-size:11px;color:var(--muted);" id="header-estado">MIX Telematics → Firebase</div>
+  </div>
+  <span class="badge" id="badge">Inactivo</span>
+</div>
+
+<!-- Estado de la autenticación -->
+<div class="box" style="margin-top:14px;">
+  <h3>🔑 Autenticación OAuth2</h3>
+  <div class="info-row"><span>Servidor</span><strong>identity.us.mixtelematics.com</strong></div>
+  <div class="info-row"><span>Estado token</span><strong id="token-status">Sin token</strong></div>
+  <div class="info-row"><span>Expira en</span><strong id="token-expiry">—</strong></div>
+  <div class="info-row"><span>Scope</span><strong>MiX.Integrate</strong></div>
+</div>
+
+<!-- Rate limit monitor -->
+<div class="sec-label">Rate Limit (límite: 20/min · 500/hora)</div>
+<div class="rate-bar">
+  <div class="rate-bar-label">
+    <span>Llamadas este minuto</span>
+    <span id="rl-min-count">0 / 20</span>
+  </div>
+  <div class="rate-track"><div class="rate-fill" id="rl-min-bar" style="width:0%"></div></div>
+</div>
+<div class="rate-bar">
+  <div class="rate-bar-label">
+    <span>Llamadas esta hora</span>
+    <span id="rl-hr-count">0 / 500</span>
+  </div>
+  <div class="rate-track"><div class="rate-fill" id="rl-hr-bar" style="width:0%"></div></div>
+</div>
+
+<!-- Horarios activos -->
+<div class="horario-card">
+  <h4>🕐 Horarios de consulta
+    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;font-weight:400;color:var(--muted);">
+      <input type="checkbox" id="toggle-horarios" checked style="accent-color:var(--accent);"> Activado
+    </label>
+  </h4>
+  <div class="horario-row"><span>Turno 6:00 AM</span><span id="h-6am">5:20 AM – 6:05 AM</span></div>
+  <div class="horario-row"><span>Turno 2:00 PM</span><span id="h-2pm">1:00 PM – 2:05 PM</span></div>
+  <div class="horario-row"><span>Turno 6:00 PM</span><span id="h-6pm">4:40 PM – 6:05 PM</span></div>
+  <div class="horario-row"><span>Turno 10:00 PM</span><span id="h-10pm">9:00 PM – 10:05 PM</span></div>
+  <div style="margin-top:8px;font-size:11px;" id="proximo-turno"></div>
+</div>
+
+<!-- Tarjetas de unidades (se generan dinámicamente) -->
+<div class="sec-label">Unidades</div>
+<div id="unidades-container"></div>
+
+<div class="debug-box" id="debug-box" style="display:none;">
+  <h4>🔍 Debug — Paradas cargadas</h4>
+  <div id="debug-content"></div>
+</div>
+<div style="text-align:center;margin:0 16px 10px;">
+  <button onclick="toggleDebug()" style="background:none;border:1px solid var(--border);color:var(--muted);font-size:11px;padding:5px 14px;border-radius:8px;cursor:pointer;">
+    Ver paradas cargadas
+  </button>
+</div>
+
+<button class="btn btn-primary" id="btn-start" onclick="iniciar()">🚀 Iniciar Bridge</button>
+<button class="btn btn-danger"  id="btn-stop"  onclick="detener()" style="display:none;">⏹ Detener Bridge</button>
+
+<div style="font-size:11px;color:var(--muted);padding:0 16px 8px;">Log de actividad</div>
+<div class="log" id="log"><div class="log-line info">Listo. Presiona Iniciar Bridge.</div></div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     SCRIPT PRINCIPAL
+═══════════════════════════════════════════════════════════════════════════ -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, doc, setDoc, deleteDoc, collection, onSnapshot }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+// ─── FIREBASE ────────────────────────────────────────────────────────────────
+const app = initializeApp({
+  apiKey:            "AIzaSyCKMIoHaMgeyVhksXFRYS0eONEJgmj0WUM",
+  authDomain:        "busetatrack.firebaseapp.com",
+  projectId:         "busetatrack",
+  storageBucket:     "busetatrack.firebasestorage.app",
+  messagingSenderId: "420499514925",
+  appId:             "1:420499514925:web:3da3d96515656389847aa4"
+});
+const db = getFirestore(app);
+
+// ─── MIX TELEMATICS CONFIG ───────────────────────────────────────────────────
+// Credenciales OAuth2 — el cliente debe proporcionar su client_id y client_secret
+// El endpoint de token usa Basic Auth con base64(client_id:client_secret)
+const MIX_TOKEN_URL   = 'https://identity.us.mixtelematics.com/core/connect/token';
+const MIX_API_BASE    = 'https://integrate.us.mixtelematics.com/api';
+
+// ⚠️  CONFIGURAR: reemplazar con las credenciales reales del cliente
+// El valor de Authorization es base64("client_id:client_secret")
+// Del reporte: Basic bWl4bXhzdXBwb3J0Okk4Wm00Y1FJbVR2Rm5LTFE=
+const MIX_BASIC_AUTH  = 'Basic bWl4bXhzdXBwb3J0Okk4Wm00Y1FJbVR2Rm5LTFE=';
+
+// AssetIds del cliente (Costa Rica) → mapeados a unitId interno
+// Del reporte Newman: los AssetIds detectados para CR son los siguientes.
+// ⚠️  CONFIGURAR: verificar qué AssetId corresponde a cada bus físico
+const VEHICULOS = {
+  '1778678522082152448': { sufijo:'62', unitId:'U01', rutaId:'E8KI0P'     },
+  '1788782913970597888': { sufijo:'63', unitId:'U02', rutaId:'san-rafael' },
+  // Agregar los otros dos AssetIds cuando se confirme a qué bus pertenecen:
+  // '1788773129076912128': { sufijo:'64', unitId:'U03', rutaId:'...' },
+  // '1788783122284900352': { sufijo:'65', unitId:'U04', rutaId:'...' },
+};
+
+// ─── INTERVALO Y RATE LIMIT ──────────────────────────────────────────────────
+// Con 2 vehículos activos, 1 llamada "Get latest" cubre todos → 1 call / ciclo
+// Ciclo de 30s → ~2 calls/min · ~120 calls/hora (bien por debajo de los límites)
+const INTERVALO = 30000; // ms entre consultas
+
+// Contador de rate limit
+const _rl = { minCalls:[], hrCalls:[] };
+
+function rlRegistrar() {
+  const now = Date.now();
+  _rl.minCalls.push(now);
+  _rl.hrCalls.push(now);
+  // Limpiar ventanas antiguas
+  _rl.minCalls = _rl.minCalls.filter(t => now - t < 60000);
+  _rl.hrCalls  = _rl.hrCalls.filter(t  => now - t < 3600000);
+  actualizarRateUI();
+}
+
+function rlOk() {
+  const now = Date.now();
+  _rl.minCalls = _rl.minCalls.filter(t => now - t < 60000);
+  _rl.hrCalls  = _rl.hrCalls.filter(t  => now - t < 3600000);
+  if (_rl.minCalls.length >= 18) { log('⚠️ Rate limit: cerca del límite por minuto ('+_rl.minCalls.length+'/20)', 'err'); return false; }
+  if (_rl.hrCalls.length  >= 480){ log('⚠️ Rate limit: cerca del límite por hora ('+_rl.hrCalls.length+'/500)',  'err'); return false; }
+  return true;
+}
+
+function actualizarRateUI() {
+  const m = _rl.minCalls.length, h = _rl.hrCalls.length;
+  document.getElementById('rl-min-count').textContent = m + ' / 20';
+  document.getElementById('rl-hr-count').textContent  = h + ' / 500';
+  const mPct = Math.min(100, (m/20)*100);
+  const hPct = Math.min(100, (h/500)*100);
+  const mBar = document.getElementById('rl-min-bar');
+  const hBar = document.getElementById('rl-hr-bar');
+  mBar.style.width = mPct + '%';
+  hBar.style.width = hPct + '%';
+  mBar.style.background = mPct > 80 ? 'var(--red)' : mPct > 60 ? 'var(--yellow)' : 'var(--green)';
+  hBar.style.background = hPct > 80 ? 'var(--red)' : hPct > 60 ? 'var(--yellow)' : 'var(--green)';
+}
+
+// ─── TOKEN OAUTH2 ─────────────────────────────────────────────────────────────
+let _accessToken    = null;
+let _tokenExpiresAt = 0;
+let _tokenRenovando = false;
+
+async function obtenerToken() {
+  if (_accessToken && Date.now() < _tokenExpiresAt - 60000) return _accessToken;
+  if (_tokenRenovando) return _accessToken;
+  _tokenRenovando = true;
+  log('🔄 Obteniendo token OAuth2…', 'info');
+  try {
+    const r = await fetch(MIX_TOKEN_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': MIX_BASIC_AUTH,
+        'Content-Type':  'application/x-www-form-urlencoded',
+      },
+      body: 'grant_type=password&scope=MiX.Integrate+offline_access&username=TU_USUARIO&password=TU_PASSWORD'
+      // ⚠️  CONFIGURAR: reemplazar TU_USUARIO y TU_PASSWORD con las credenciales del cliente
+    });
+
+    if (!r.ok) {
+      const err = await r.text();
+      log('❌ Error token: HTTP ' + r.status + ' — ' + err.slice(0,80), 'err');
+      document.getElementById('token-status').textContent = '❌ Error ' + r.status;
+      _tokenRenovando = false;
+      return null;
+    }
+
+    const json = await r.json();
+    if (!json.access_token) {
+      log('❌ Respuesta sin access_token', 'err');
+      _tokenRenovando = false;
+      return null;
+    }
+
+    _accessToken    = json.access_token;
+    _tokenExpiresAt = Date.now() + (json.expires_in || 3600) * 1000;
+    document.getElementById('token-status').textContent = '✅ Activo';
+    document.getElementById('token-expiry').textContent =
+      new Date(_tokenExpiresAt).toLocaleTimeString('es-CR');
+    log('✅ Token OAuth2 obtenido — expira: ' + new Date(_tokenExpiresAt).toLocaleTimeString('es-CR'), 'ok');
+    _tokenRenovando = false;
+    return _accessToken;
+  } catch(e) {
+    log('❌ Error obteniendo token: ' + e.message, 'err');
+    document.getElementById('token-status').textContent = '❌ Error de red';
+    _tokenRenovando = false;
+    return null;
+  }
+}
+
+// ─── HORARIOS ────────────────────────────────────────────────────────────────
+let _horariosPorRuta = {};
+
+const TURNOS_DEFAULT = [
+  { nombre:'6am',  inicio: 5*60+20, fin: 6*60+5  },
+  { nombre:'2pm',  inicio:13*60+0,  fin:14*60+5  },
+  { nombre:'6pm',  inicio:16*60+40, fin:18*60+5  },
+  { nombre:'10pm', inicio:21*60+0,  fin:22*60+5  },
+];
+
+function timeToMin(t) {
+  if (!t) return 0;
+  const [h,m] = t.split(':').map(Number);
+  return h*60+m;
+}
+
+function getTurnosRuta(rutaId) {
+  const v = _horariosPorRuta[rutaId];
+  if (!v) return TURNOS_DEFAULT;
+  return ['6am','2pm','6pm','10pm']
+    .filter(n => v[n]?.activo)
+    .map(n => ({ nombre:n, inicio:timeToMin(v[n].ini), fin:timeToMin(v[n].fin) }));
+}
+
+function turnoActivoParaRuta(rutaId) {
+  const ahora = new Date();
+  const min   = ahora.getHours()*60+ahora.getMinutes();
+  return getTurnosRuta(rutaId).find(t => min >= t.inicio && min <= t.fin) || null;
+}
+
+function turnoActivo() {
+  const ahora = new Date();
+  const min   = ahora.getHours()*60+ahora.getMinutes();
+  const todos  = Object.values(_horariosPorRuta).length
+    ? ['6am','2pm','6pm','10pm'].flatMap(n => {
+        const activos = Object.values(_horariosPorRuta).filter(v=>v[n]?.activo);
+        if (!activos.length) return [];
+        const inicios = activos.map(v=>timeToMin(v[n].ini));
+        const fines   = activos.map(v=>timeToMin(v[n].fin));
+        return [{ nombre:n, inicio:Math.min(...inicios), fin:Math.max(...fines) }];
+      })
+    : TURNOS_DEFAULT;
+  return todos.find(t => min >= t.inicio && min <= t.fin) || null;
+}
+
+function turnoLabel() {
+  const t = turnoActivo();
+  return t ? t.nombre : '10pm';
+}
+
+function proximoTurno() {
+  const ahora = new Date();
+  const min   = ahora.getHours()*60+ahora.getMinutes();
+  const todos  = Object.values(_horariosPorRuta).length
+    ? ['6am','2pm','6pm','10pm'].flatMap(n => {
+        const activos = Object.values(_horariosPorRuta).filter(v=>v[n]?.activo);
+        if (!activos.length) return [];
+        const inicios = activos.map(v=>timeToMin(v[n].ini));
+        const fines   = activos.map(v=>timeToMin(v[n].fin));
+        return [{ nombre:n, inicio:Math.min(...inicios), fin:Math.max(...fines) }];
+      })
+    : TURNOS_DEFAULT;
+  const prox = todos.find(t => t.inicio > min)
+    || todos.find(t => t.inicio + 1440 > min);
+  if (!prox) return '—';
+  const h = Math.floor(prox.inicio/60), m = prox.inicio%60;
+  return `Próximo turno: ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+}
+
+function actualizarHorarioUI() {
+  const ahora = new Date();
+  const min   = ahora.getHours()*60+ahora.getMinutes();
+  ['6am','2pm','6pm','10pm'].forEach(n => {
+    const el = document.getElementById('h-'+n);
+    if (!el) return;
+    const turnos = Object.values(_horariosPorRuta).length
+      ? Object.values(_horariosPorRuta)
+          .filter(v => v[n]?.activo)
+          .map(v => ({ ini:timeToMin(v[n].ini), fin:timeToMin(v[n].fin) }))
+      : [TURNOS_DEFAULT.find(t=>t.nombre===n)].filter(Boolean).map(t=>({ini:t.inicio,fin:t.fin}));
+    if (!turnos.length) { el.textContent='Inactivo'; return; }
+    const ini = Math.min(...turnos.map(t=>t.ini));
+    const fin = Math.max(...turnos.map(t=>t.fin));
+    const fmt = m => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+    const activo = min >= ini && min <= fin;
+    el.innerHTML = `<span class="${activo?'horario-activo':''}">${fmt(ini)} – ${fmt(fin)}</span>`;
+  });
+  document.getElementById('proximo-turno').textContent =
+    turnoActivo() ? '🟢 Turno en curso' : proximoTurno();
+}
+
+// ─── CONTROL DE TURNOS ────────────────────────────────────────────────────────
+let _turnoAnterior = null;
+
+function verificarCambioTurno() {
+  const turno = turnoActivo();
+  const nombre = turno ? turno.nombre : null;
+  if (nombre !== _turnoAnterior) {
+    if (nombre && _turnoAnterior !== null) {
+      log('🔄 Nuevo turno (' + nombre + ') — reseteando paradas', 'info');
+      Object.values(VEHICULOS).forEach(v => {
+        _stopActual[v.unitId] = 0;
+        const el = document.getElementById('stop-' + v.sufijo);
+        if (el) el.textContent = '📍 Reiniciado para turno ' + nombre;
+      });
+    } else if (nombre && _turnoAnterior === null) {
+      log('🟢 Turno ' + nombre + ' activo — iniciando', 'info');
+      Object.values(VEHICULOS).forEach(v => _stopActual[v.unitId] = 0);
+    } else if (!nombre) {
+      log('⏸ Fuera de horario — pausando', 'info');
+      const b = document.getElementById('badge');
+      b.textContent = 'Pausado'; b.className = 'badge pause';
+      document.getElementById('header-estado').textContent = proximoTurno();
+    }
+    _turnoAnterior = nombre;
+  }
+  actualizarHorarioUI();
+}
+
+// ─── ESTADO INTERNO ───────────────────────────────────────────────────────────
+let _iv         = null;
+let _rutasCache = {};
+let _stopActual = {};
+Object.values(VEHICULOS).forEach(v => _stopActual[v.unitId] = 0);
+
+// ─── FIRESTORE REST (para solicitudes puntuales) ──────────────────────────────
+const FS_REST = 'https://firestore.googleapis.com/v1/projects/busetatrack/databases/(default)/documents';
+const FS_KEY  = 'AIzaSyCKMIoHaMgeyVhksXFRYS0eONEJgmj0WUM';
+
+// ─── RUTAS DESDE FIREBASE ────────────────────────────────────────────────────
+onSnapshot(collection(db, 'rutas'), snap => {
+  _rutasCache = {};
+  snap.forEach(d => {
+    const data = d.data();
+    _rutasCache[d.id] = data;
+    if (data.ventanas) _horariosPorRuta[d.id] = data.ventanas;
+  });
+  actualizarTablaHorarios();
+  actualizarUnidadesUI();
+  const dbg = document.getElementById('debug-content');
+  if (dbg) {
+    dbg.innerHTML = Object.keys(_rutasCache).map(id => {
+      const r = _rutasCache[id];
+      return `<div style="margin-bottom:8px;padding:6px;background:var(--surface);border-radius:6px;">
+        <strong style="color:var(--accent);">${id}</strong> → ${r.nombre}<br>
+        ${(r.paradas||[]).map((p,i)=>`<span style="font-size:10px;">${i}: ${p.nombre} (${p.lat},${p.lng})</span>`).join('<br>')}
+      </div>`;
+    }).join('');
+  }
+});
+
+function actualizarTablaHorarios() {
+  // Actualizar UI con horarios reales de Firebase si están disponibles
+  actualizarHorarioUI();
+}
+
+function actualizarUnidadesUI() {
+  Object.values(VEHICULOS).forEach(v => {
+    const el = document.getElementById('ruta-' + v.sufijo);
+    if (!el) return;
+    const ruta = _rutasCache[v.rutaId];
+    el.textContent = ruta ? 'Ruta ' + ruta.nombre : '⚠️ Ruta "' + v.rutaId + '" no encontrada';
+  });
+}
+
+// ─── GENERAR TARJETAS DE UNIDADES ────────────────────────────────────────────
+function renderUnidades() {
+  const cont = document.getElementById('unidades-container');
+  cont.innerHTML = Object.entries(VEHICULOS).map(([assetId, v]) => `
+    <div class="unit-card">
+      <div class="unit-head">
+        <div class="dot" id="dot-${v.sufijo}"></div>
+        <div style="flex:1;">
+          <div class="unit-name">HB42${v.sufijo}</div>
+          <div class="unit-sub" id="ruta-${v.sufijo}">Cargando ruta…</div>
+          <div class="unit-sub" style="font-size:10px;color:#4b5563;">AssetId: ${assetId}</div>
+        </div>
+        <button class="reset-btn" onclick="resetUnidad('${v.sufijo}','${v.unitId}')">🔄 Reset</button>
+      </div>
+      <div class="unit-stop" id="stop-${v.sufijo}">📍 —</div>
+      <div class="unit-dist" id="dist-${v.sufijo}"></div>
+      <div class="coords"    id="coords-${v.sufijo}">Esperando GPS…</div>
+      <div class="ts"        id="ts-${v.sufijo}">—</div>
+    </div>
+  `).join('');
+}
+
+// ─── DISTANCIA Y PARADA ───────────────────────────────────────────────────────
+function metrosEntre(lat1, lng1, lat2, lng2) {
+  const R=6371000, dLat=(lat2-lat1)*Math.PI/180, dLng=(lng2-lng1)*Math.PI/180;
+  const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+function calcularStopIdx(lat, lng, paradas, stopActual) {
+  const total = paradas.length;
+  if (!total) return { idx:0, distMetros:0 };
+  if (total===1) return { idx:0, distMetros:Math.round(metrosEntre(lat,lng,paradas[0].lat,paradas[0].lng)) };
+  let idx = stopActual;
+  for (let i=stopActual; i<total-1; i++) {
+    const dA = metrosEntre(lat,lng,paradas[i].lat,paradas[i].lng);
+    const dS = metrosEntre(lat,lng,paradas[i+1].lat,paradas[i+1].lng);
+    if (dS < dA) idx = i+1; else break;
+  }
+  idx = Math.max(stopActual, idx);
+  return { idx, distMetros:Math.round(metrosEntre(lat,lng,paradas[idx].lat,paradas[idx].lng)) };
+}
+
+// ─── CONSULTA MIX TELEMATICS ─────────────────────────────────────────────────
+// Usamos el endpoint "Get latest position" que devuelve la última posición
+// de cada asset en una sola llamada → muy eficiente para el rate limit.
+// Endpoint: GET /api/assets/positions/latest?assetIds=ID1,ID2,...
+
+async function consultarPosiciones(forzar=false) {
+  const token = await obtenerToken();
+  if (!token) { log('Sin token OAuth2, reintentando en próximo ciclo…', 'err'); return; }
+  if (!rlOk()) { log('⏳ Rate limit alcanzado — esperando', 'err'); return; }
+
+  const assetIds = Object.keys(VEHICULOS);
+  const url = `${MIX_API_BASE}/assets/positions/latest?assetIds=${assetIds.join(',')}`;
+
+  try {
+    const r = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': 'Bearer ' + token,
+        'Content-Type':  'application/json',
+        'Accept':        'application/json',
+      }
+    });
+    rlRegistrar();
+
+    if (!r.ok) {
+      if (r.status === 401 || r.status === 403) {
+        log('🔑 Token expirado, renovando…', 'info');
+        _accessToken = null;
+        _tokenExpiresAt = 0;
+      } else if (r.status === 429) {
+        log('🚫 Too Many Requests — pausando 60s', 'err');
+        if (_iv) { clearInterval(_iv); _iv = null; }
+        setTimeout(() => {
+          if (!_iv) _iv = setInterval(consultar, INTERVALO);
+        }, 61000);
+      } else {
+        log('❌ HTTP ' + r.status, 'err');
+      }
+      return;
+    }
+
+    const data = await r.json();
+    if (!Array.isArray(data)) { log('Respuesta inesperada del API', 'err'); return; }
+
+    for (const pos of data) {
+      const assetId = String(pos.AssetId);
+      const vehic   = VEHICULOS[assetId];
+      if (!vehic) continue;
+
+      const horariosActivos = document.getElementById('toggle-horarios')?.checked !== false;
+      if (!forzar && horariosActivos && !turnoActivoParaRuta(vehic.rutaId)) {
+        log(vehic.unitId + ': fuera de horario para esta ruta', 'info');
+        continue;
+      }
+
+      const lat = pos.Latitude;
+      const lng = pos.Longitude;
+
+      // Validar coordenadas de Costa Rica
+      if (lat < 8 || lat > 11 || lng < -86 || lng > -82) {
+        log(vehic.unitId + ': coords fuera de CR ('+lat.toFixed(4)+', '+lng.toFixed(4)+')', 'err');
+        document.getElementById('dot-' + vehic.sufijo).className = 'dot err';
+        continue;
+      }
+
+      const ruta = _rutasCache[vehic.rutaId];
+      let stopIdx = _stopActual[vehic.unitId] || 0;
+      let stopNombre = '—', distStr = '';
+
+      if (ruta?.paradas?.length > 0) {
+        const res   = calcularStopIdx(lat, lng, ruta.paradas, stopIdx);
+        stopIdx     = res.idx;
+        _stopActual[vehic.unitId] = stopIdx;
+        stopNombre  = ruta.paradas[stopIdx].nombre;
+        distStr     = res.distMetros < 1000
+          ? res.distMetros + ' m de "' + stopNombre + '"'
+          : (res.distMetros/1000).toFixed(1) + ' km de "' + stopNombre + '"';
+      } else {
+        log(vehic.unitId + ': rutaId "' + vehic.rutaId + '" no encontrado', 'err');
+      }
+
+      // Guardar en Firebase
+      await setDoc(doc(db, 'gps', vehic.unitId), {
+        lat, lng, stopIdx,
+        estado:   'activo',
+        ruta:     vehic.rutaId,
+        turno:    turnoLabel(),
+        fuente:   'mix-telematics',
+        heading:  pos.Heading  || 0,
+        speed:    pos.SpeedKilometresPerHour || 0,
+        address:  pos.FormattedAddress || '',
+        ts:       Date.now()
+      });
+
+      // Actualizar UI
+      document.getElementById('dot-'   + vehic.sufijo).className = 'dot ok';
+      document.getElementById('stop-'  + vehic.sufijo).textContent = '📍 Parada ' + stopIdx + ': ' + stopNombre;
+      document.getElementById('dist-'  + vehic.sufijo).textContent = distStr ? '📏 ' + distStr : '';
+      document.getElementById('coords-'+ vehic.sufijo).textContent =
+        lat.toFixed(5) + '° N, ' + Math.abs(lng).toFixed(5) + '° W  |  ' +
+        (pos.SpeedKilometresPerHour||0) + ' km/h  ' +
+        (pos.Heading ? '↗ ' + pos.Heading + '°' : '');
+      document.getElementById('ts-'    + vehic.sufijo).textContent =
+        'Actualizado: ' + new Date().toLocaleTimeString('es-CR') +
+        (pos.FormattedAddress ? '\n📌 ' + pos.FormattedAddress : '');
+
+      log(vehic.unitId + ': parada ' + stopIdx + ' "' + stopNombre + '" | ' + (distStr||'sin ruta'), 'ok');
+    }
+  } catch(e) {
+    log('❌ Error consultando: ' + e.message, 'err');
+  }
+}
+
+// ─── CONSULTAR (con control de horario) ──────────────────────────────────────
+async function consultar() {
+  verificarCambioTurno();
+  const horariosActivos = document.getElementById('toggle-horarios')?.checked !== false;
+  const turnoEnCurso    = turnoActivo();
+
+  if (horariosActivos && !turnoEnCurso) {
+    const b = document.getElementById('badge');
+    if (b.textContent !== 'Pausado') {
+      b.textContent = 'Pausado'; b.className = 'badge pause';
+      document.getElementById('header-estado').textContent = proximoTurno();
+    }
+    return;
+  }
+
+  const b = document.getElementById('badge');
+  if (b.textContent !== 'Activo') {
+    b.textContent = 'Activo'; b.className = 'badge on';
+    document.getElementById('header-estado').textContent = 'MIX Telematics → Firebase';
+  }
+
+  await consultarPosiciones(false);
+}
+
+// ─── SOLICITUDES PUNTUALES DESDE ADMIN ───────────────────────────────────────
+async function verificarSolicitudes() {
+  for (const [assetId, vehic] of Object.entries(VEHICULOS)) {
+    try {
+      const url  = FS_REST + '/solicitudes/' + vehic.unitId + '?key=' + FS_KEY;
+      const r    = await fetch(url);
+      if (!r.ok) continue;
+      const data = await r.json();
+      if (!data?.fields?.solicitado?.booleanValue) continue;
+
+      log('📍 Solicitud de ubicación para ' + vehic.unitId, 'info');
+      await consultarPosiciones(true);
+      await fetch(url, { method:'DELETE' });
+      try {
+        await setDoc(doc(db, 'gps', vehic.unitId), { estado:'puntual' }, { merge:true });
+      } catch(e) {}
+      log('✅ Solicitud procesada para ' + vehic.unitId, 'ok');
+    } catch(e) {}
+  }
+}
+
+setInterval(verificarSolicitudes, 5000);
+
+// ─── CONTROLES ───────────────────────────────────────────────────────────────
+window.resetUnidad = function(sufijo, unitId) {
+  _stopActual[unitId] = 0;
+  const el = document.getElementById('stop-'+sufijo);
+  if (el) el.textContent = '📍 Reiniciado a parada 0';
+  log('Reset manual de ' + unitId, 'info');
+};
+
+window.iniciar = async function() {
+  log('🔐 Obteniendo token OAuth2 de MIX Telematics…', 'info');
+  const token = await obtenerToken();
+  if (!token) {
+    log('❌ No se pudo obtener token. Verifica las credenciales en el código.', 'err');
+    return;
+  }
+  Object.values(VEHICULOS).forEach(v => _stopActual[v.unitId] = 0);
+  _turnoAnterior = null;
+  verificarCambioTurno();
+  await consultar();
+  _iv = setInterval(consultar, INTERVALO);
+  // Renovar token automáticamente cada 50 minutos (expira en 60)
+  setInterval(async () => {
+    log('⏰ Renovación programada de token…', 'info');
+    _accessToken = null; _tokenExpiresAt = 0;
+    await obtenerToken();
+  }, 50 * 60 * 1000);
+  document.getElementById('btn-start').style.display = 'none';
+  document.getElementById('btn-stop').style.display  = 'block';
+  log('Bridge activo — MIX Telematics API', 'ok');
+};
+
+window.detener = function() {
+  if (_iv) { clearInterval(_iv); _iv = null; }
+  document.getElementById('btn-start').style.display = 'block';
+  document.getElementById('btn-stop').style.display  = 'none';
+  const b = document.getElementById('badge');
+  b.textContent = 'Inactivo'; b.className = 'badge';
+  document.getElementById('header-estado').textContent = 'MIX Telematics → Firebase';
+  Object.values(VEHICULOS).forEach(v => {
+    const s = v.sufijo;
+    document.getElementById('dot-'+s).className = 'dot';
+    document.getElementById('stop-'+s).textContent = '📍 —';
+    document.getElementById('dist-'+s).textContent = '';
+  });
+  log('Bridge detenido', 'info');
+};
+
+window.toggleDebug = function() {
+  const b = document.getElementById('debug-box');
+  b.style.display = b.style.display === 'none' ? 'block' : 'none';
+};
+
+// ─── LOG ──────────────────────────────────────────────────────────────────────
+function log(msg, tipo='info') {
+  const box  = document.getElementById('log');
+  const hora = new Date().toLocaleTimeString('es-CR');
+  const el   = document.createElement('div');
+  el.className = 'log-line ' + tipo;
+  el.textContent = '[' + hora + '] ' + msg;
+  box.insertBefore(el, box.firstChild);
+  while (box.children.length > 100) box.removeChild(box.lastChild);
+}
+
+// ─── INIT ────────────────────────────────────────────────────────────────────
+renderUnidades();
+actualizarHorarioUI();
+actualizarRateUI();
+setInterval(actualizarHorarioUI, 60000);
+
+</script>
+</body>
+</html>
